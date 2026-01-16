@@ -102,7 +102,7 @@ gitops-apps/
 │
 ├── staging/                          # Staging environment
 │   ├── config/
-│   │   └── rc-appset/                # Helm values per application
+│   │   └── bank-appset/                # Helm values per application
 │   │       ├── values-barista-val-cafe.yaml
 │   │       ├── values-cleanwork-va-service.yaml
 │   │       ├── values-penumbra-node-helm.yaml
@@ -113,11 +113,11 @@ gitops-apps/
 │   ├── charts/                       # Helm charts
 │   ├── karpenter/                    # Karpenter provisioners
 │   ├── penumbra-node/                # Penumbra node configs
-│   └── rc-appset.yaml                # ArgoCD ApplicationSet
+│   └── bank-appset.yaml                # ArgoCD ApplicationSet
 │
 ├── prod/                             # Production environment
 │   ├── config/
-│   │   └── rc-appset/                # Helm values per application
+│   │   └── bank-appset/                # Helm values per application
 │   ├── apps/
 │   ├── certs/                        # TLS certificates
 │   ├── karpenter/
@@ -125,7 +125,7 @@ gitops-apps/
 │   ├── other-ingress/
 │   ├── sg-cluster/                   # Security groups
 │   ├── sg-db/                        # Database security groups
-│   └── rc-appset.yaml                # ArgoCD ApplicationSet
+│   └── bank-appset.yaml                # ArgoCD ApplicationSet
 │
 ├── charts/                           # Shared Helm chart templates
 │   ├── barista-val-cafe/
@@ -189,12 +189,12 @@ gitops-apps/
 5. **Manifest Update**
    - Updates Helm values file at:
      ```
-     <environment>/config/rc-appset/values-<repo_name>.yaml
+     <environment>/config/bank-appset/values-<repo_name>.yaml
      ```
    - Modifies only the `image.tag` field
    - Example:
      ```bash
-     yq -i '.image.tag = "abc123def456"' staging/config/rc-appset/values-banksystem-web.yaml
+     yq -i '.image.tag = "abc123def456"' staging/config/bank-appset/values-banksystem-web.yaml
      ```
 
 6. **Idempotency Check**
@@ -260,7 +260,7 @@ gitops-apps/
 │ 4. GitOps Update (gitops-apps/gitops-commit.yaml)          │
 │    ├─ Checkout gitops-apps repo                            │
 │    ├─ Update image tag in values file                      │
-│    │  └─ staging/config/rc-appset/values-banksystem-web.yaml │
+│    │  └─ staging/config/bank-appset/values-banksystem-web.yaml │
 │    └─ Commit: "staging: deploy banksystem-web @ <sha>"     │
 └─────────────────────────────────────────────────────────────┘
                           ↓
@@ -404,7 +404,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 
 This repository uses **ArgoCD ApplicationSet** for multi-application management.
 
-**File**: `<environment>/rc-appset.yaml`
+**File**: `<environment>/bank-appset.yaml`
 
 **Example**:
 
@@ -412,7 +412,7 @@ This repository uses **ArgoCD ApplicationSet** for multi-application management.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: rc-appset-staging
+  name: bank-appset-staging
   namespace: argocd
 spec:
   generators:
@@ -420,7 +420,7 @@ spec:
         repoURL: 'git@github.com:gabriel-devops-portfolio/gitops-apps.git'
         revision: main
         files:
-          - path: 'staging/config/rc-appset/*.yaml'
+          - path: 'staging/config/bank-appset/*.yaml'
   template:
     metadata:
       annotations:
@@ -437,7 +437,7 @@ spec:
         path: 'staging/charts/{{ application }}'
         helm:
           valueFiles:
-            - ../../config/rc-appset/values-{{ application }}.yaml
+            - ../../config/bank-appset/values-{{ application }}.yaml
       syncPolicy:
         automated:
           prune: true
@@ -446,7 +446,7 @@ spec:
 
 ### How It Works
 
-1. **Discovery**: ArgoCD scans `staging/config/rc-appset/` for values files
+1. **Discovery**: ArgoCD scans `staging/config/bank-appset/` for values files
 2. **Generation**: Creates an Application for each values file found
 3. **Rendering**: Renders Helm chart using environment-specific values
 4. **Sync**: Continuously reconciles desired state with cluster state
@@ -457,7 +457,7 @@ spec:
 To deploy a new application:
 
 1. Create Helm chart in `charts/<application-name>/`
-2. Create values file in `<environment>/config/rc-appset/values-<application-name>.yaml`
+2. Create values file in `<environment>/config/bank-appset/values-<application-name>.yaml`
 3. Define application metadata:
    ```yaml
    application: <application-name>
@@ -493,7 +493,7 @@ gh workflow run gitops-commit.yaml \
 
 ```bash
 # Find the commit that introduced the bad deployment
-git log --oneline staging/config/rc-appset/values-<app>.yaml
+git log --oneline staging/config/bank-appset/values-<app>.yaml
 
 # Revert the commit
 git revert <commit-sha>
@@ -514,11 +514,11 @@ git push origin main
 
 ```bash
 # Edit values file to previous working image tag
-vim staging/config/rc-appset/values-<app>.yaml
+vim staging/config/bank-appset/values-<app>.yaml
 
 # Update image.tag to previous working SHA
 # Commit and push
-git add staging/config/rc-appset/values-<app>.yaml
+git add staging/config/bank-appset/values-<app>.yaml
 git commit -m "rollback: revert <app> to <previous-sha>"
 git push origin main
 ```
@@ -527,13 +527,13 @@ git push origin main
 
 ```bash
 # View all deployments for an application
-git log --oneline --all -- staging/config/rc-appset/values-banksystem-web.yaml
+git log --oneline --all -- staging/config/bank-appset/values-banksystem-web.yaml
 
 # View full commit details
 git show <commit-sha>
 
 # View diff between current and previous
-git diff HEAD~1 staging/config/rc-appset/values-banksystem-web.yaml
+git diff HEAD~1 staging/config/bank-appset/values-banksystem-web.yaml
 ```
 
 ### Debugging Failed Deployments
