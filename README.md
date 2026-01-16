@@ -996,8 +996,7 @@ For deployment issues or questions:
 
 1. **Slack Channel**: `#gitops-deployments`
 2. **On-call Escalation**: PagerDuty (for production incidents)
-3. **Documentation**: Internal wiki (link)
-4. **Email**: devops-team@company.com
+3. **Email**: gabidachaba@gmail.com
 
 ---
 
