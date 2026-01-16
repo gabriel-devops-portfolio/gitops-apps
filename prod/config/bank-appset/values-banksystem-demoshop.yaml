@@ -1,0 +1,125 @@
+application: banksystem-demoshop
+
+clusterConfig:
+  namespace: banksystem
+
+replicaCount: 2
+
+image:
+  registry: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+  repository: demoshop
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/demoshop-rds-role
+  name: demoshop-sa
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+# capabilities:
+#   drop:
+#   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  name: http
+
+containerPort:
+  name: http
+  port: 5000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+httpRoute:
+  enabled: true
+  annotations: {}
+  parentRefs:
+    - name: platform-gateway
+      namespace: gateway-system
+      sectionName: http
+  hostnames:
+    - demoshop.app.pilotgab.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "1Gi"
+    cpu: "500m"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+volumes: []
+volumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+env:
+  - name: ASPNETCORE_ENVIRONMENT
+    value: "Production"
+  - name: RdsAuthentication__UseIamAuthentication
+    value: "true"
+  - name: RdsAuthentication__RdsEndpoint
+    value: "<RDS_ENDPOINT>"
+  - name: RdsAuthentication__DbUser
+    value: "demoshop_app"
+  - name: RdsAuthentication__AwsRegion
+    value: "us-east-1"
+  - name: RdsAuthentication__FallbackPassword
+    valueFrom:
+      secretKeyRef:
+        name: demoshop-db-credentials
+        key: password

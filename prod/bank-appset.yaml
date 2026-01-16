@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: bank-appset-prod
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: "git@github.com:gabriel-devops-portfolio/gitops-apps.git"
+        revision: main
+        files:
+          - path: "prod/config/bank-appset/*.yaml"
+  template:
+    metadata:
+      annotations:
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: "{{ channel }}"
+      name: "{{ application }}"
+    spec:
+      destination:
+        namespace: "{{ clusterConfig.namespace }}"
+        server: https://kubernetes.default.svc
+      project: "default"
+      source:
+        repoURL: git@github.com:gabriel-devops-portfolio/gitops-apps.git
+        targetRevision: main
+        path: "charts/{{ application }}"
+        helm:
+          valueFiles:
+            - ../../prod/config/bank-appset/values-{{ application }}.yaml
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

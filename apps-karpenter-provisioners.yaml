@@ -6,12 +6,12 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'git@github.com:pilotgab/gitops-apps.git'
+    repoURL: "git@github.com:gabriel-devops-portfolio/gitops-apps.git"
     targetRevision: main
-    path: 'prod/karpenter'
+    path: "prod/karpenter"
     directory:
       recurse: false
-      include: '*.yaml'
+      include: "*.yaml"
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:

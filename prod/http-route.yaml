@@ -1,14 +1,14 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: apps-certs
+  name: api-gateway-resource
   namespace: argocd
 spec:
   project: default
   source:
     repoURL: "git@github.com:gabriel-devops-portfolio/gitops-apps.git"
     targetRevision: main
-    path: "prod/certs"
+    path: "prod/api-gateways"
     directory:
       recurse: false
       include: "*.yaml"

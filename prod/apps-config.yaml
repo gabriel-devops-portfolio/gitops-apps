@@ -6,12 +6,12 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'git@github.com:radiantcommons/rc-gitops.git'
-    targetRevision: dev
-    path: 'ovh/apps/extra'
+    repoURL: "git@github.com:gabriel-devops-portfolio/banksystem-web.git"
+    targetRevision: main
+    path: "prod/apps/extra"
     directory:
       recurse: false
-      include: '*.yaml'
+      include: "*.yaml"
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:

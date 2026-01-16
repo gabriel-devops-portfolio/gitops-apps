@@ -1,0 +1,22 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    email: gabidachaba@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+      - selector:
+          dnsZones:
+            - app.pilotgab.com
+        dns01:
+          route53:
+            region: us-east-1
+            hostedZoneID: Z0370020127AFOKTMQ2VT
+            accessKeyID: AKIAXCG6FZCZM2TNDAMR
+            secretAccessKeySecretRef:
+              name: cert-manager-route53-aws-creds
+              key: aws_secret_access_key
