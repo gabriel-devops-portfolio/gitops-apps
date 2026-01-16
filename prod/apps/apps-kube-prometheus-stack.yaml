@@ -1,0 +1,179 @@
+application: kube-prometheus-stack
+clusterConfig:
+  namespace: monitoring
+chart:
+  name: kube-prometheus-stack
+  releaseName: kube-prometheus-stack
+  repoURL: https://prometheus-community.github.io/helm-charts
+  targetRevision: 80.13.3
+  values: |
+    rbac:
+      create: true
+    prometheus:
+      prometheusSpec:
+        replicas: 1
+        replicaExternalLabelName: "__replica__"
+        ruleSelectorNilUsesHelmValues: false
+        prometheusExternalLabelName: "prometheus"
+        serviceMonitorSelectorNilUsesHelmValues: false
+        serviceMonitorSelector: {}
+        serviceMonitorNamespaceSelector: {}
+        probeSelectorNilUsesHelmValues: false
+        probeNamespaceSelector: {}
+        podMonitorSelectorNilUsesHelmValues: false
+        retention: 10d
+        enableAdminAPI: false
+        walCompression: true
+        ruleSelector:
+          matchExpressions:
+            - key: prometheus
+              operator: In
+              values:
+              - prometheus
+        extraScrapeConfigs: |
+          - job_name: karpenter
+            kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                - karpenter
+            relabel_configs:
+            - source_labels:
+              - __meta_kubernetes_endpoints_name
+              - __meta_kubernetes_endpoint_port_name
+              action: keep
+              regex: karpenter;http-metrics
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: gp3-kms
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 30Gi
+        resources:
+          requests:
+            cpu: 2
+            memory: 2Gi
+          limits:
+            cpu: 4
+            memory: 4Gi
+
+        extraLabels:
+          app: prometheus
+
+    grafana:
+      admin:
+        existingSecret: grafana-basic-auths
+        userKey: admin-user
+        passwordKey: admin-password
+      initChownData:
+        enabled: false
+      existingSecret: grafana-basic-auths
+      # envFromSecret: grafana-google-analytics-secret
+      # assertNoLeakedSecrets: false
+      # plugins:
+      #   - grafana-googleanalytics-datasource
+      grafana.ini:
+        live:
+          enabled: false
+        server:
+          root_url: https://grafana-prod.app.pilotgab.com/
+        users:
+          viewers_can_edit: true
+        auth:
+          disable_login_form: false
+          anonymous_enabled: false
+        # auth.google:
+        #   enabled: true
+        #   client_id: 145205230670-p6s57edklgsa5u7542t8srsdldfmkn1d.apps.googleusercontent.com
+        #   client_secret: GF_AUTH_GOOGLE_CLIENT_SECRET
+        #   scopes: openid email profile
+        #   auth_url: https://accounts.google.com/o/oauth2/v2/auth
+        #   token_url: https://oauth2.googleapis.com/token
+        #   api_url: https://openidconnect.googleapis.com/v1/userinfo
+        #   allow_sign_up: true
+        #   use_pkce: true
+      dashboardProviders:
+        dashboardproviders.yaml:
+          apiVersion: 1
+          providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+      dashboards:
+        default:
+          default-dashboard:
+            gnetId: 15661
+            datasource: Prometheus
+      sidecar:
+        dashboards:
+          enabled: true
+          defaultFolderName: null
+        datasources:
+          defaultDatasourceEnabled: true
+      additionalDataSources:
+        - name: Loki
+          type: loki
+          url: http://loki-loki-distributed-query-frontend.monitoring.svc.cluster.local:3100
+      persistence:
+        enabled: true
+        storageClassName: gp3-kms
+        accessModes:
+          - ReadWriteOnce
+        size: 10Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2
+          memory: 4Gi
+
+    alertmanager:
+      alertmanagerSpec:
+        alertmanagerConfigSelector:
+          matchLabels:
+            alertmanager: "true"
+        replicas: 1
+        logLevel: info
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 1Gi
+        # storage:
+        #   volumeClaimTemplate:
+        #     spec:
+        #       storageClassName: gp3-kms
+        #       accessModes:
+        #         - ReadWriteOnce
+        #       resources:
+        #         requests:
+        #           storage: 10Gi
+
+    kube-state-metrics:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+
+    prometheus-node-exporter:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 1Gi

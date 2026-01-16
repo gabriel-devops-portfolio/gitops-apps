@@ -1,0 +1,107 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cert-sync
+  namespace: cert-manager
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: cert-sync-sa
+          containers:
+          - name: kubectl
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Function to check if a secret exists
+              secret_exists() {
+                kubectl get secret "$1" -n "$2" &> /dev/null
+              }
+
+              # Get list of namespaces, excluding system namespaces
+              NAMESPACES=$(kubectl get ns -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep -v -E '^(kube-system|kube-public|kube-node-lease|default|cert-manager)$')
+
+              # Certificates to sync
+              declare -A CERTS
+              CERTS["rc-com-tls"]="*.radiantcommons.com wildcard certificate"
+              CERTS["rc-net-tls"]="*.radiantcommons.net wildcard certificate"
+
+              # Process each certificate for each namespace
+              for cert_name in "${!CERTS[@]}"; do
+                echo "Processing certificate: $cert_name - ${CERTS[$cert_name]}"
+
+                # Get the source secret data
+                if ! secret_exists "$cert_name" "cert-manager"; then
+                  echo "Source secret $cert_name not found in cert-manager namespace"
+                  continue
+                fi
+
+                SECRET_DATA=$(kubectl get secret "$cert_name" -n cert-manager -o yaml)
+
+                # Process each namespace
+                for ns in $NAMESPACES; do
+                  echo "Processing namespace: $ns for certificate $cert_name"
+
+                  # Check if the secret exists and is up-to-date
+                  EXISTING_SECRET=$(kubectl get secret "$cert_name" -n "$ns" -o yaml 2>/dev/null || echo "")
+                  if [ -n "$EXISTING_SECRET" ]; then
+                    # Compare only the data sections to avoid false positives from metadata differences
+                    SOURCE_DATA=$(echo "$SECRET_DATA" | grep -A100 "data:" | grep -v "namespace:" | grep -v "resourceVersion:" | grep -v "uid:")
+                    TARGET_DATA=$(echo "$EXISTING_SECRET" | grep -A100 "data:" | grep -v "namespace:" | grep -v "resourceVersion:" | grep -v "uid:")
+
+                    if [ "$SOURCE_DATA" = "$TARGET_DATA" ]; then
+                      echo "Secret $cert_name in namespace $ns is already up-to-date, skipping."
+                      continue
+                    fi
+                  fi
+
+                  # Create a temporary file for the modified secret
+                  SECRET_FILE=$(mktemp)
+                  echo "$SECRET_DATA" | sed "s/namespace: cert-manager/namespace: $ns/" > "$SECRET_FILE"
+
+                  # Apply the secret and cleanup
+                  kubectl apply -f "$SECRET_FILE"
+                  rm -f "$SECRET_FILE"
+
+                  echo "Completed processing $cert_name for namespace: $ns"
+                done
+              done
+          restartPolicy: OnFailure
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cert-sync-sa
+  namespace: cert-manager
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cert-secret-sync
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "create", "update", "patch"]
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cert-secret-sync
+subjects:
+- kind: ServiceAccount
+  name: cert-sync-sa
+  namespace: cert-manager
+roleRef:
+  kind: ClusterRole
+  name: cert-secret-sync
+  apiGroup: rbac.authorization.k8s.io

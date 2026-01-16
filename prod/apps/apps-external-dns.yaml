@@ -1,0 +1,42 @@
+application: external-dns
+clusterConfig:
+  namespace: kube-system
+
+chart:
+  repoURL: https://kubernetes-sigs.github.io/external-dns/
+  name: external-dns
+  releaseName: external-dns
+  targetRevision: v0.20.0
+
+  values: |
+    provider:
+      name: aws
+
+    sources:
+      - gateway-httproute
+      - gateway
+
+    domainFilters:
+      - app.pilotgab.com
+      - *.app.pilotgab.com
+
+    policy: sync
+    registry: txt
+    txtOwnerId: pilotgab-eks
+
+    interval: 1m
+    logLevel: info
+
+    serviceAccount:
+      create: true
+      name: external-dns
+      annotations:
+        eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/ExternalDNSRoute53Role
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

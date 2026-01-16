@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "barista-val-cafe.fullname" . }}
+  labels:
+    {{- include "barista-val-cafe.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "barista-val-cafe.selectorLabels" . | nindent 4 }}

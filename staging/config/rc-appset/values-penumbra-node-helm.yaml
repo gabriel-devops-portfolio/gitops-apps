@@ -1,0 +1,65 @@
+---
+# Custom values for the Penumbra node in the rc-appset environment
+application: penumbra-node-helm
+clusterConfig:
+  namespace: penumbra
+
+image:
+  repository: ghcr.io/penumbra-zone/penumbra
+  tag: "v1.4.0"
+  pullPolicy: IfNotPresent
+
+penumbra_bootstrap_node_cometbft_rpc_url: "http://void.s9.gay:26657"
+
+# Bootstrap archive URL for historical blocks
+penumbra_bootstrap_archive_url: "https://artifacts.plinfra.net/penumbra-1/penumbra-node-archive-height-4504015.tar.gz"
+
+cometbft:
+  image:
+    repository: cometbft/cometbft
+    tag: "v0.37.15"
+    pullPolicy: IfNotPresent
+  securityContext:
+    runAsUser: 101
+    runAsGroup: 1000
+  config:
+    p2p:
+      max_num_inbound_peers: 300
+      max_num_outbound_peers: 200
+      seeds: >
+        c28827cb96c14c905b127b92065a3fb4cd77d7f6@seeds.whispernode.com:21956,
+        20e1000e88125698264454a884812746c2eb4807@seeds.lavenderfive.com:21956
+      persistent_peers: >
+        7ae6236905eb6a06d9f27e22204d4c49d4e36d4f@108.21.128.181:26656,
+        76a0f3a7dbc735bd799a8630dfe21ef932816ba3@159.89.254.147:26656
+    fast_sync: true
+    addr_book_strict: false
+    # Using kv indexer for simplicity - Conor uses psql for his production setup
+    indexer: kv
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerEnv: []
+
+wait_for_catchup: false
+maintenanceMode: false
+ingressRoute:
+  enabled: false
+
+podAnnotations: {}
+
+nodes:
+  - moniker: rc-penumbra-node
+    external_address: ""
+    seed_mode: false
+
+persistence:
+  enabled: true
+  size: 400Gi
+  db:
+    size: 50Gi
+
+part_of: rc-penumbra

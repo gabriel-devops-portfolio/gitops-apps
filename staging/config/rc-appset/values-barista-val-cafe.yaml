@@ -1,0 +1,44 @@
+# Default values for barista-val-cafe
+application: barista-val-cafe
+clusterConfig:
+  namespace: barista-val-cafe
+# Number of replicas to deploy
+replicaCount: 2
+# Image configuration
+image:
+  registry: 485797251250.dkr.ecr.eu-west-1.amazonaws.com
+  repository: barista-val-cafe
+  tag: 8adb4d72e908996dac28c9b1784c2deb243f2348
+  pullPolicy: IfNotPresent
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-west-1:485797251250:certificate/005286f1-bfdb-4d80-b207-2df5dd910b2a
+  hosts:
+    - host: barista-val-cafe.radiantcommons.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - hosts:
+        - barista-val-cafe.radiantcommons.com
+# Resources configuration
+resources:
+  limits:
+    cpu: 200m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi

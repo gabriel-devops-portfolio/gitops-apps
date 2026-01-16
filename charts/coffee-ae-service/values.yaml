@@ -1,0 +1,79 @@
+application: coffee-ae-service
+
+clusterConfig:
+  namespace: coffee-ae-service
+
+workloadType: statefulset  # Change to "deployment" to use Deployment
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false  # Prevents HPA from being rendered
+
+image:
+  registry: 485797251250.dkr.ecr.eu-west-1.amazonaws.com
+  repository: coffee-ae-service
+  tag: "dcfa13fded822584ba9741495cab9d82fdb1f3f6"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ecr-creds
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+env:
+  - name: DATABASE_URL
+    value: sqlite:////app/data/visitors.db
+  - name: PORT
+    value: "8000"
+
+resources:
+  limits:
+    cpu: 300m
+    memory: 250Mi
+  requests:
+    cpu: 250m
+    memory: 200Mi
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  ingressClassName: traefik-external
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: coffee-ae-service.radiantcommons.com
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: coffee-ae-service
+              port:
+                number: 80
+  tls:
+    - hosts:
+        - coffee-ae-service.radiantcommons.com
+      secretName: rc-com-tls
+
+volumeClaimTemplates:
+  - metadata:
+      name: data-storage
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: ovh-block-standard
+      resources:
+        requests:
+          storage: 4Gi

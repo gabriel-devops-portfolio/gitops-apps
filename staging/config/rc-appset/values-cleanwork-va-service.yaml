@@ -1,0 +1,50 @@
+application: cleanwork-va-service
+clusterConfig:
+  namespace: penumbra
+image:
+  registry: 485797251250.dkr.ecr.eu-west-1.amazonaws.com
+  repository: cleanwork-va-service
+  pullPolicy: IfNotPresent
+  tag: 2f678a27313a1fc7a00936b945eabb5c8bd57c09
+imagePullSecrets:
+  - name: ecr-creds
+nameOverride: ""
+fullnameOverride: ""
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+service:
+  type: ClusterIP
+  port: 80
+ingress:
+  enabled: true
+  ingressClassName: traefik-external
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: cleanwork-va-service.radiantcommons.com
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+          service:
+            name: cleanwork-va-service
+            port:
+              number: 80
+  tls:
+    - hosts:
+        - cleanwork-va-service.radiantcommons.com
+      secretName: cleanwork-va-service-tls
+  resources:
+  limits:
+    cpu: 300m
+    memory: 250Mi
+  requests:
+    cpu: 250m
+    memory: 200Mi

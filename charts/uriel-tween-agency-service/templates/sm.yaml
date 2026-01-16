@@ -1,0 +1,26 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: uriel-tween-agency-service-monitor
+  namespace: agency
+  labels:
+    app: uriel-tween-agency-service
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: uriel-tween-agency-service
+      app.kubernetes.io/name: uriel-tween-agency-service
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    scheme: http
+    honorLabels: true
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod_name
+  namespaceSelector:
+    matchNames:
+    - agency

@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: karpenter-provisioners
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'git@github.com:radiantcommons/rc-gitops.git'
+    targetRevision: dev
+    path: 'shared/karpenter'
+    directory:
+      recurse: false
+      include: '*.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

@@ -1,0 +1,30 @@
+application: kubernetes-metrics-server
+clusterConfig:
+  namespace: kube-system
+chart:
+  name: metrics-server
+  releaseName: metrics-server
+  repoURL: https://kubernetes-sigs.github.io/metrics-server/
+  targetRevision: v0.8.4
+  values: |
+    args:
+      - --kubelet-insecure-tls
+      - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname,InternalDNS,ExternalDNS
+      - --kubelet-use-node-status-port
+      - --metric-resolution=15s
+
+    serviceAccount:
+      create: true
+      name: metrics-server
+
+    rbac:
+      create: true
+      clusterRole: true
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

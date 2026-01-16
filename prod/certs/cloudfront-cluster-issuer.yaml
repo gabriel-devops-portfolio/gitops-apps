@@ -1,0 +1,102 @@
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@radiantcommons.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-tls
+    solvers:
+      # Solver for radiantcommons.com domain
+      - dns01:
+          cloudflare:
+            email: jon@radiantcommons.com
+            apiTokenSecretRef:
+              name: cloudflare-token-secret
+              key: cloudflare-token
+            zoneID: "e41c814166eb966872c9eeb67eb88bd0"
+        selector:
+          dnsNames:
+            - "radiantcommons.com"
+            - "*.radiantcommons.com"
+
+      # Solver for radiantcommons.net domain
+      - dns01:
+          cloudflare:
+            email: jon@radiantcommons.com
+            apiTokenSecretRef:
+              name: cloudflare-token-secret
+              key: cloudflare-token
+            zoneID: "1eeb5ccab987e1530cda9de5c41bca8d"
+        selector:
+          dnsNames:
+            - "radiantcommons.net"
+            - "*.radiantcommons.net"
+
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: rc-letsencrypt-prod
+spec:
+  acme:
+    email: devops@radiantcommons.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: rc-letsencrypt-prod
+    solvers:
+      - selector:
+          dnsZones:
+            - tokenomics.penumbra.zone
+        dns01:
+          route53:
+            region: eu-west-1
+            hostedZoneID: Z0370020127AFOKTMQ2VT
+            accessKeyID: AKIAXCG6FZCZM2TNDAMR
+            secretAccessKeySecretRef:
+              name: cert-manager-route53-aws-creds
+              key: aws_secret_access_key
+      - selector:
+          dnsZones:
+            - vote.penumbra.zone
+        dns01:
+          route53:
+            region: eu-west-1
+            hostedZoneID: Z04385281X4H14FUF1LCC
+            accessKeyID: AKIAXCG6FZCZM2TNDAMR
+            secretAccessKeySecretRef:
+              name: cert-manager-route53-aws-creds
+              key: aws_secret_access_key
+
+      - selector:
+          dnsNames:
+            - "dex.penumbra.zone"
+        dns01:
+          route53:
+            region: eu-west-1
+            hostedZoneID: Z00630123SJK2DDMXURVD
+            accessKeyID: AKIAXCG6FZCZM2TNDAMR
+            secretAccessKeySecretRef:
+              name: cert-manager-route53-aws-creds
+              key: aws_secret_access_key
+---
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: letsencrypt-delegated
+# spec:
+#   acme:
+#     email: devops@radiantcommons.com
+#     server: https://acme-v02.api.letsencrypt.org/directory
+#     privateKeySecretRef:
+#       name: letsencrypt-delegated-key
+#     solvers:
+#       - dns01:
+#           cloudflare:
+#             email: jon@radiantcommons.com
+#             apiTokenSecretRef:
+#               name: cloudflare-token-secret
+#               key: cloudflare-token

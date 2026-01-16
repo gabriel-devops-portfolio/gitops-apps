@@ -1,0 +1,58 @@
+application: prometheus-blackbox-exporter
+clusterConfig:
+  namespace: monitoring
+chart:
+  name: prometheus-blackbox-exporter
+  releaseName: blackbox-exporter
+  repoURL: https://prometheus-community.github.io/helm-charts
+  targetRevision: 11.7.0
+  values: |
+    fullnameOverride: blackbox-exporter
+
+    config:
+      modules:
+        http_2xx:
+          prober: http
+          timeout: 10s
+          http:
+            method: GET
+            valid_status_codes: [200, 301, 302]
+            preferred_ip_protocol: ip4
+            headers:
+              User-Agent: "Blackbox Exporter/1.0"
+            tls_config:
+              insecure_skip_verify: false
+
+        tcp_connect:
+          prober: tcp
+          timeout: 5s
+
+        dns_check:
+          prober: dns
+          timeout: 5s
+          dns:
+            query_name: example.com
+            query_type: A
+
+    service:
+      type: ClusterIP
+      port: 9115
+
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 30s
+      scrapeTimeout: 15s
+      labels:
+        app: blackbox-exporter
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: prometheus-blackbox-exporter
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 500Mi

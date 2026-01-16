@@ -1,0 +1,29 @@
+application: trivy-operator
+clusterConfig:
+  namespace: trivy-system
+chart:
+  name: trivy-operator
+  releaseName: trivy-operator
+  repoURL: https://aquasecurity.github.io/helm-charts/
+  targetRevision: v0.29.0
+  values: |
+    trivy:
+      ignoreUnfixed: true
+    operator:
+      vulnerabilityScanner: Trivy
+    serviceAccount:
+      create: true
+      name: trivy-operator
+    rbac:
+      create: true
+      clusterRole: true
+
+    serviceMonitor:
+      enabled: true
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

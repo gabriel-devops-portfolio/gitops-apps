@@ -1,0 +1,13 @@
+application: gateway-api-crds
+clusterConfig:
+  namespace: kube-system
+
+chart:
+  repoURL: https://kubernetes-sigs.github.io/gateway-api
+  name: gateway-api
+  releaseName: gateway-api
+  targetRevision: v1.4.1
+
+  values: |
+    installCRDs: true
+ 

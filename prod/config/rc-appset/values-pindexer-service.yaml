@@ -1,0 +1,75 @@
+# application: pindexer-service
+# clusterConfig:
+#   namespace: penumbra
+
+# image:
+#   registry: ghcr.io
+#   repository: penumbra-zone/penumbra
+#   pullPolicy: Always
+#   tag: "v0.80.9"
+
+# # Pindexer configuration
+# pindexer:
+#   # Source database (CometBFT raw events)
+#   source_url: "postgresql://pindexerdb:19Ab94cd1994@pindexerdb.cfu6kcq4ezl6.eu-west-1.rds.amazonaws.com:5432/indexer"
+#   # Target database (enriched pindexer tables)
+#   target_url: "postgresql://pindexerdb:19Ab94cd1994@pindexerdb.cfu6kcq4ezl6.eu-west-1.rds.amazonaws.com:5432/pindexer"
+  
+#   # Processing configuration
+#   batch_size: 100
+#   start_height: 1
+  
+#   # Prometheus metrics
+#   metrics:
+#     enabled: true
+#     port: 9000
+
+# # Service configuration
+# service:
+#   type: ClusterIP
+#   ports:
+#     - name: metrics
+#       port: 9000
+#       targetPort: 9000
+
+# # Resource limits
+# resources:
+#   requests:
+#     memory: "512Mi"
+#     cpu: "250m"
+#   limits:
+#     memory: "2Gi"
+#     cpu: "1000m"
+
+# # Health checks
+# livenessProbe:
+#   httpGet:
+#     path: /metrics
+#     port: 9000
+#   initialDelaySeconds: 30
+#   periodSeconds: 30
+
+# readinessProbe:
+#   httpGet:
+#     path: /metrics
+#     port: 9000
+#   initialDelaySeconds: 10
+#   periodSeconds: 10
+
+# # Pod configuration
+# podAnnotations:
+#   prometheus.io/scrape: "true"
+#   prometheus.io/port: "9000"
+#   prometheus.io/path: "/metrics"
+
+# # Environment variables
+# env:
+#   - name: RUST_LOG
+#     value: "info,pindexer=debug"
+#   - name: PINDEXER_SOURCE_DATABASE_URL
+#     value: "postgresql://pindexerdb:19Ab94cd1994@pindexerdb.cfu6kcq4ezl6.eu-west-1.rds.amazonaws.com:5432/indexer"
+#   - name: PINDEXER_TARGET_DATABASE_URL
+#     value: "postgresql://pindexerdb:19Ab94cd1994@pindexerdb.cfu6kcq4ezl6.eu-west-1.rds.amazonaws.com:5432/pindexer"
+
+# imagePullSecrets:
+#   - name: ecr-creds

@@ -1,0 +1,41 @@
+application: cert-manager
+clusterConfig:
+  namespace: cert-manager
+chart:
+  name: cert-manager
+  releaseName: cert-manager
+  repoURL: https://charts.jetstack.io
+  targetRevision: 1.13.2
+  values: |
+    installCRDs: true
+    nodeSelector:
+      eks.amazonaws.com/nodegroup: internal
+    tolerations:
+      - key: 'internal'
+        operator: 'Equal'
+        value: 'critical'
+        effect: 'NoSchedule'
+    webhook:
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: internal
+      tolerations:
+        - key: 'internal'
+          operator: 'Equal'
+          value: 'critical'
+          effect: 'NoSchedule'
+    cainjector:
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: internal
+      tolerations:
+        - key: 'internal'
+          operator: 'Equal'
+          value: 'critical'
+          effect: 'NoSchedule'
+    startupapicheck:
+      nodeSelector:
+        eks.amazonaws.com/nodegroup: internal
+      tolerations:
+        - key: 'internal'
+          operator: 'Equal'
+          value: 'critical'
+          effect: 'NoSchedule'

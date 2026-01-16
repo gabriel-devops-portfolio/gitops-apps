@@ -1,0 +1,85 @@
+# Default values for penumbra-analytics-service
+replicaCount: 1
+
+image:
+  repository: ghcr.io/radiantcommons/penumbra-analytics-service
+  tag: "latest"
+  pullPolicy: Always
+
+# Environment variables
+env:
+  # PENUMBRA_RPC_ENDPOINT: "https://rpc-penumbra.radiantcommons.com"
+  # PENUMBRA_GRPC_ENDPOINT: "https://penumbra.crouton.digital"
+  # PENUMBRA_CHAIN_ID: "penumbra-1"
+  # # Service timing configuration
+  # UPDATE_INTERVAL_SECONDS: "30"
+  # DISCORD_INTERVAL_HOURS: "3"
+  # API_PORT: "8080"
+  # METRICS_PORT: "8082"
+  # # Logging configuration
+  # LOG_LEVEL: "INFO"
+  # LOG_FORMAT: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  # # Discord embed styling
+  # DISCORD_EMBED_COLOR: "7447FF"
+  # DISCORD_EMBED_THUMBNAIL: "https://cdn.prod.website-files.com/670d31b6956ae869422bc849/6717e5593e8921b1b6d8f6e4_Vectors-Wrapper.svg"
+
+# Secret configuration
+# Use an existing secret containing required environment variables
+# Set name to empty string to create a new secret from the secrets values below
+existingSecret:
+  name: ""
+  # Required keys in the secret when using existingSecret:
+  # - PENUMBRA_INDEXER_ENDPOINT
+  # - PENUMBRA_INDEXER_CA_CERT
+  # - DISCORD_WEBHOOK_URL
+
+# Secret environment variables (only used when existingSecret.name is empty)
+# secrets:
+#   DISCORD_WEBHOOK_URL: ""
+#   PENUMBRA_INDEXER_ENDPOINT: ""
+#   PENUMBRA_INDEXER_CA_CERT: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+  metricsPort: 8082
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8082
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8082
+  initialDelaySeconds: 5
+  periodSeconds: 5
+
+# Prometheus metrics configuration
+metrics:
+  enabled: false
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  port: 8082
+  namespace: ""

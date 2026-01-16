@@ -1,0 +1,41 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: blackbox-probe
+  namespace: monitoring
+spec:
+  interval: 60s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc.cluster.local:9115
+  targets:
+    # Static URLs
+    staticConfig:
+      static:
+        - https://grafana-prod.app.pilotgab.com
+        - https://app.pilotgab.com
+
+    # Dynamic API Gateway HTTPRoutes
+    crd:
+      apiGroup: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespaceSelector:
+        any: true
+      relabelingConfigs:
+        # Use hostnames as probe target
+        - sourceLabels: [__meta_kubernetes_httproute_hostnames]
+          regex: (.+)
+          replacement: https://${1}
+          targetLabel: __param_target
+
+        # Label for route name
+        - sourceLabels: [__meta_kubernetes_httproute_name]
+          targetLabel: route
+
+        # Label for route namespace
+        - sourceLabels: [__meta_kubernetes_httproute_namespace]
+          targetLabel: namespace
+
+        # Also set target label for metrics
+        - sourceLabels: [__param_target]
+          targetLabel: target

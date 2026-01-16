@@ -1,0 +1,148 @@
+name: ArgoCD application commit
+run-name: Deploy ${{ inputs.repo_name }} → ${{ inputs.environment }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_id:
+        description: "Image tag / commit SHA"
+        required: true
+        type: string
+
+      repo_name:
+        description: "Application repository name"
+        required: true
+        type: string
+
+      environment:
+        description: "Target environment"
+        required: true
+        default: staging
+        type: string
+
+      runner_label:
+        description: "Runner label"
+        required: false
+        default: ubuntu-latest
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gitops-${{ inputs.repo_name }}-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  update-image:
+    runs-on: ${{ inputs.runner_label }}
+    environment:
+      name: ${{ inputs.environment }}
+
+    steps:
+      - name: Validate environment
+        run: |
+          case "${{ inputs.environment }}" in
+            staging|prod) ;;
+            *)
+              echo "Invalid environment: ${{ inputs.environment }}"
+              exit 1
+              ;;
+          esac
+
+      - name: Generate GitHub App token
+        id: generate_token
+        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        with:
+          app_id: ${{ secrets.GITOPS_APP_ID }}
+          private_key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ steps.generate_token.outputs.token }}
+          fetch-depth: 0
+
+      - name: Install yq
+        uses: dcarbone/install-yq-action@v1.3.1
+        with:
+          version: v4.45.1
+
+      - name: Update image tag
+        run: |
+          FILE="${{ inputs.environment }}/config/rc-appset/values-${{ inputs.repo_name }}.yaml"
+
+          if [[ ! -f "$FILE" ]]; then
+            echo "File not found: $FILE"
+            exit 1
+          fi
+
+          CURRENT_TAG=$(yq '.image.tag' "$FILE")
+
+          if [[ "$CURRENT_TAG" == "${{ inputs.commit_id }}" ]]; then
+            exit 0
+          fi
+
+          yq -i '.image.tag = "${{ inputs.commit_id }}"' "$FILE"
+
+      - name: Detect no-op change
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+
+      - name: Commit and push change
+        uses: EndBug/add-and-commit@v9
+        with:
+          add: ${{ inputs.environment }}/config/rc-appset/values-${{ inputs.repo_name }}.yaml
+          message: |
+            ${{ inputs.environment }}: deploy ${{ inputs.repo_name }} @ ${{ inputs.commit_id }}
+          push: true
+          pull: "--rebase --autostash"
+          author_name: gitops-bot
+          author_email: gitops-bot@users.noreply.github.com
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.24
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          payload: |
+            {
+              "text": "GitOps deployment failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "ArgoCD GitOps Commit Failed",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*App:* ${{ inputs.repo_name }}\n*Env:* ${{ inputs.environment }}\n*Image:* ${{ inputs.commit_id }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View workflow run",
+                        "emoji": true
+                      },
+                      "style": "primary",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

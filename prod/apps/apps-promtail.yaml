@@ -1,0 +1,107 @@
+application: promtail
+clusterConfig:
+  namespace: monitoring
+chart:
+  name: promtail
+  releaseName: promtail
+  repoURL: https://grafana.github.io/helm-charts
+  targetRevision: 6.17.1
+  values: |
+    daemonset:
+      enabled: true
+    rbac:
+      create: true
+    enableTracing: true
+    config:
+      enabled: true
+      clients:
+        - url: http://loki-loki-distributed-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+      logLevel: info
+      logFormat: logfmt
+      server:
+        http_listen_port: 3101
+      positions:
+        filename: /run/promtail/positions.yaml
+        sync_period: 10s
+      enableTracing: true
+
+    serviceMonitor:
+      enabled: true
+      additionalLabels: {}
+      interval: ""
+      scrapeTimeout: ""
+      honorLabels: false
+
+    resources:
+      limits:
+        cpu: 2
+        memory: 4Gi
+      requests:
+        cpu: 1
+        memory: 2Gi
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          - drop:
+              expression: '.*promtail.*'
+              source: filename
+          - cri: {}
+          - match:
+              selector: '{}'
+              stages:
+                - regex:
+                    expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (?P<level>\w+) - (?P<message>.*)'
+                - labels:
+                    level: ""
+                - output:
+                    source: message
+          - drop:
+              longer_than: "100kB"
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node_name
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            replacement: /var/log/pods/$1/*.log
+            target_label: __path__
+
+      - job_name: journal
+        journal:
+          max_age: 12h
+          json: false
+        relabel_configs:
+          - source_labels: ['__journal__systemd_unit']
+            target_label: 'unit'
+          - source_labels: ['__journal__hostname']
+            target_label: 'node_name'
+          - source_labels: ['__journal_syslog_identifier']
+            target_label: 'syslog_identifier'
+          - target_label: job
+            replacement: systemd-journal
+
+      - job_name: system-varlogs
+        static_configs:
+          - targets: [localhost]
+            labels:
+              job: varlogs
+              __path__: /var/log/{syslog,messages,kubelet.log,kube-proxy.log,kern.log,auth.log,daemon.log}
+        pipeline_stages:
+          - drop:
+              longer_than: "10kB"
+          - output:
+              source: log
+        relabel_configs:
+          - source_labels: [__host__]
+            target_label: node_name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container

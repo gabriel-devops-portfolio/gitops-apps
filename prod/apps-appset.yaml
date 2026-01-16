@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps-appset-ovh
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: 'git@github.com:radiantcommons/rc-gitops.git'
+        revision: dev
+        files:
+          - path: 'ovh/apps/*.yaml'
+  template:
+    metadata:
+      name: '{{application}}'
+    spec:
+      project: 'default'
+      source:
+        chart: '{{chart.name}}'
+        repoURL: '{{chart.repoURL}}'
+        targetRevision: '{{chart.targetRevision}}'
+        helm:
+          releaseName: '{{chart.releaseName}}'
+          values: |-
+            {{chart.values}}
+      destination:
+        namespace: '{{clusterConfig.namespace}}'
+        server: https://kubernetes.default.svc
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - 'ServerSideApply=true'
+          - CreateNamespace=true
+
+      ignoreDifferences:
+        - group: apps
+          kind: StatefulSet
+          name: loki-loki-distributed-ingester
+          namespace: monitoring
+          jsonPointers:
+          - /spec/volumeClaimTemplates
+        - group: storage.k8s.io
+          kind: CSIDriver
+          jqPathExpressions:
+            - .spec.seLinuxMount

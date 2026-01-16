@@ -1,0 +1,25 @@
+apiVersion: v2
+name: penumbra-lqt-bot
+description: A Helm chart for Penumbra LQT Bot with API server
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - penumbra
+  - blockchain
+  - analytics
+  - liquidity
+  - api
+
+home: https://github.com/radiantcommons/penumbra-lqt-bot
+sources:
+  - https://github.com/radiantcommons/penumbra-lqt-bot
+
+maintainers:
+  - name: Radiant Commons
+    email: info@radiantcommons.com
+
+annotations:
+  category: Analytics
+  licenses: MIT

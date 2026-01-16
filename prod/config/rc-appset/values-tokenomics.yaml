@@ -1,0 +1,90 @@
+application: tokenomics
+clusterConfig:
+  namespace: penumbra
+image:
+  registry: 485797251250.dkr.ecr.eu-west-1.amazonaws.com
+  repository: tokenomics
+  pullPolicy: IfNotPresent
+  tag: "f618dc2bdeec80d0ac680651b7dcb300b80294df"
+imagePullSecrets:
+  - name: ecr-creds
+nameOverride: ""
+fullnameOverride: ""
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+env:
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: db-tokenomics-cred
+        key: DATABASE_URL
+  - name: AWS_ACCESS_KEY_ID
+    valueFrom:
+      secretKeyRef:
+        name: db-tokenomics-cred
+        key: AWS_ACCESS_KEY_ID
+  - name: AWS_SECRET_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: db-tokenomics-cred
+        key: AWS_SECRET_ACCESS_KEY
+  - name: AWS_S3_REGION
+    value: "eu-west-1"
+  - name: AWS_S3_BUCKET_NAME
+    value: "tokenomics-s3"
+  - name: NEXT_PUBLIC_SHOW_LIQUIDITY_TOURNAMENT
+    value: "false"
+livenessProbe:
+  httpGet:
+    path: /ping
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+readinessProbe:
+  httpGet:
+    path: /ping
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 5
+resources:
+  limits:
+    cpu: 2
+    memory: 2Gi
+  requests:
+    cpu: 1
+    memory: 1Gi
+service:
+  type: ClusterIP
+  port: 3000
+ingress:
+  enabled: true
+  ingressClassName: traefik-external
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: tokenomics.penumbra.zone
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: tokenomics
+              port:
+                number: 3000
+  tls:
+    - hosts:
+        - tokenomics.penumbra.zone
+      secretName: penumbra-tokenomics-tls

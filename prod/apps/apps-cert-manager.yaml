@@ -1,0 +1,71 @@
+application: cert-manager
+clusterConfig:
+  namespace: cert-manager
+chart:
+  name: cert-manager
+  releaseName: cert-manager
+  repoURL: https://charts.jetstack.io
+  targetRevision: v1.13.0
+  values: |
+    installCRDs: true
+    replicaCount: 1
+
+    extraArgs:
+      - --dns01-recursive-nameservers=8.8.8.8:53,8.8.4.4:53
+      - --dns01-recursive-nameservers-only
+      - --issuer-ambient-credentials=false
+
+    podDnsPolicy: None
+    podDnsConfig:
+      nameservers:
+        - 8.8.8.8
+        - 8.8.4.4
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    webhook:
+      replicaCount: 1
+      timeoutSeconds: 30
+      hostNetwork: false
+      securePort: 10250
+      serviceAccount:
+        create: true
+      certificates:
+        selfsign: true
+        useCertManager: true
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    cainjector:
+      replicaCount: 1
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    startupapicheck:
+      timeout: 5m
+      backoffLimit: 10
+      rbac:
+        create: true
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

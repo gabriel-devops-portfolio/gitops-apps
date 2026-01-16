@@ -1,0 +1,30 @@
+application: veil-service
+clusterConfig:
+  namespace: penumbra
+image:
+  registry: ghcr.io
+  repository: radiantcommons/veil
+  pullPolicy: Always
+  tag: latest
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  # annotations:
+  #   traefik.ingress.kubernetes.io/router.entrypoints: websecure
+  #   traefik.ingress.kubernetes.io/router.tls: "true"
+  #   traefik.ingress.kubernetes.io/redirect-entry-point: https
+  # hosts:
+  #   - host: dex.penumbra.zone
+  #     paths:
+  #       - path: /
+  #         pathType: Prefix
+  # tls:
+  #   - hosts:
+  #       - dex.penumbra.zone
+  #     secretName: penumbra-zone-tls
+service:
+  type: ClusterIP
+  port: 3000
+
+imagePullSecrets:
+  - name: ecr-creds
