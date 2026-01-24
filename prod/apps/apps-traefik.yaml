@@ -13,30 +13,42 @@ chart:
       - "--global.checknewversion=false"
 
     additionalArguments:
-      - "--serversTransport.insecureSkipVerify=true"
+      - "--serversTransport.insecureSkipVerify=false"
       - "--log.level=INFO"
+      - "--ping=true"
 
     deployment:
       enabled: true
-      replicas: 1
+      replicas: 2
 
     serviceAccount:
       create: true
       name: traefik-gateway
 
+    tls:
+      options:
+        default:
+          minVersion: VersionTLS12
+
     ports:
       web:
+        port: 80
         redirections:
           entrypoint:
             to: websecure
             priority: 10
 
       websecure:
-        advertisedPort: 4443
+        advertisedPort: 443
         http3:
           enabled: true
         tls:
           enabled: true
+
+      metrics:
+        port: 9100
+        expose:
+          default: true
 
     ingressRoute:
       dashboard:
@@ -45,17 +57,20 @@ chart:
     providers:
       kubernetesGateway:
         enabled: true
-
-      kubernetesIngress:
-        enabled: false
+        experimentalChannel: false
 
       kubernetesCRD:
         enabled: true
-        allowExternalNameServices: true
+        allowExternalNameServices: false
 
     gateway:
-      enabled: true
-      name: traefik
+      enabled: false
+
+    gatewayClass:
+      enabled: false
+
+    kubernetesIngress:
+      enabled: false
 
     rbac:
       enabled: true
@@ -63,17 +78,78 @@ chart:
     logs:
       general:
         level: INFO
+      access:
+        format: json
+        fields:
+          general:
+            names:
+              RouterNames: drop
+
+    metrics:
+      prometheus:
+        enabled: true
+        entryPoint: metrics
+        addEntryPointsLabels: true
+        addRoutersLabels: true
+        addServicesLabels: true
+
+    tracing:
+      otlp:
+        enabled: true
+        grpc:
+          endpoint: jaeger-collector.observability.svc.cluster.local:4317
+          insecure: true
+
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 30s
+      scrapeTimeout: 10s
+      labels:
+        release: kube-prometheus-stack
 
     service:
       type: LoadBalancer
       annotations:
-        service.beta.kubernetes.io/aws-load-balancer-type: "alb"
+        service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
         service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
         service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
         service.beta.kubernetes.io/aws-load-balancer-ssl-ports: ""
+
     podDisruptionBudget:
       enabled: true
       minAvailable: 1
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 2
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 70
+
+    readinessProbe:
+      httpGet:
+        path: /ping
+        port: 8080
+
+    livenessProbe:
+      httpGet:
+        path: /ping
+        port: 8080
 
     resources:
       requests:

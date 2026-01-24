@@ -1,0 +1,105 @@
+application: jaeger
+clusterConfig:
+  namespace: observability
+
+chart:
+  name: jaeger
+  releaseName: jaeger
+  repoURL: https://jaegertracing.github.io/helm-charts
+  targetRevision: v2.57.0
+
+values: |
+  provisionDataStore:
+    cassandra: false
+    elasticsearch: true
+
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      host: "{{ opensearch_endpoint }}"
+      port: 443
+      scheme: https
+      indexPrefix: jaeger-prod
+      tls:
+        enabled: true
+        skipHostVerify: false
+
+  collector:
+    replicaCount: 2
+    serviceAccount:
+      create: true
+      name: jaeger-collector
+      annotations:
+        eks.amazonaws.com/role-arn: "{{ jaeger_role_arn }}"
+
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2
+        memory: 2Gi
+
+    env:
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AWS_DEFAULT_REGION
+        value: us-east-1
+
+    config:
+      span_storage_type: elasticsearch
+
+  query:
+    replicaCount: 2
+    serviceAccount:
+      create: true
+      name: jaeger-query
+      annotations:
+        eks.amazonaws.com/role-arn: "{{ jaeger_role_arn }}"
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+    env:
+      - name: AWS_REGION
+        value: us-east-1
+      - name: AWS_DEFAULT_REGION
+        value: us-east-1
+
+    config:
+      span_storage_type: elasticsearch
+
+    service:
+      type: ClusterIP
+      port: 16686
+
+  agent:
+    enabled: false
+
+  # OpenSearch index management
+  esIndexCleaner:
+    enabled: true
+    numberOfDays: 7
+    schedule: "55 23 * * *"
+    serviceAccount:
+      create: true
+      name: jaeger-es-index-cleaner
+      annotations:
+        eks.amazonaws.com/role-arn: "{{ jaeger_role_arn }}"
+
+  # Disable Cassandra and Spark (using OpenSearch)
+  cassandra:
+    enabled: false
+
+  spark:
+    enabled: false
+
+  # Global labels
+  commonLabels:
+    app.kubernetes.io/part-of: jaeger
+    app.kubernetes.io/managed-by: argocd

@@ -1,0 +1,84 @@
+application: traefik
+clusterConfig:
+  namespace: traefik
+chart:
+  name: traefik
+  releaseName: traefik
+  repoURL: https://helm.traefik.io/traefik
+  targetRevision: 3.6.6
+
+  values: |
+    globalArguments:
+      - "--global.sendanonymoususage=false"
+      - "--global.checknewversion=false"
+
+    additionalArguments:
+      - "--serversTransport.insecureSkipVerify=true"
+      - "--log.level=INFO"
+
+    deployment:
+      enabled: true
+      replicas: 1
+
+    serviceAccount:
+      create: true
+      name: traefik-gateway
+
+    ports:
+      web:
+        redirections:
+          entrypoint:
+            to: websecure
+            priority: 10
+
+      websecure:
+        advertisedPort: 4443
+        http3:
+          enabled: true
+        tls:
+          enabled: true
+
+    ingressRoute:
+      dashboard:
+        enabled: false
+
+    providers:
+      kubernetesGateway:
+        enabled: true
+
+      kubernetesIngress:
+        enabled: false
+
+      kubernetesCRD:
+        enabled: true
+        allowExternalNameServices: true
+
+    gateway:
+      enabled: true
+      name: traefik
+
+    rbac:
+      enabled: true
+
+    logs:
+      general:
+        level: INFO
+
+    service:
+      type: LoadBalancer
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: "alb"
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+        service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "tcp"
+        service.beta.kubernetes.io/aws-load-balancer-ssl-ports: ""
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi

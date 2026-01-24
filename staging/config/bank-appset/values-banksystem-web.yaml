@@ -61,7 +61,7 @@ httpRoute:
       namespace: gateway-system
       sectionName: http
   hostnames:
-    - banksystem-web.app.pilotgab.com
+    - banksystem.app.pilotgab.com
   rules:
     - matches:
         - path:

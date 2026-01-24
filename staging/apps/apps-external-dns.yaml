@@ -18,7 +18,7 @@ chart:
 
     domainFilters:
       - app.pilotgab.com
-      - "*.app.pilotgab.com"
+      - *.app.pilotgab.com
 
     policy: sync
     registry: txt
@@ -26,19 +26,6 @@ chart:
 
     interval: 1m
     logLevel: info
-
-    replicas: 2
-
-    podSecurityContext:
-      runAsNonRoot: true
-      runAsUser: 65532
-      fsGroup: 65532
-      readOnlyRootFilesystem: true
-      allowPrivilegeEscalation: false
-
-    podDisruptionBudget:
-      enabled: true
-      minAvailable: 1
 
     serviceAccount:
       create: true
@@ -48,21 +35,8 @@ chart:
 
     resources:
       requests:
-        cpu: 100m
-        memory: 128Mi
+        cpu: 50m
+        memory: 64Mi
       limits:
-        cpu: 400m
-        memory: 512Mi
-
-    metrics:
-      enabled: true
-      service:
-        type: ClusterIP
-        port: 7979
-      serviceMonitor:
-        enabled: true
-        namespace: kube-system
-        interval: 30s
-        scrapeTimeout: 10s
-        labels:
-          release: kube-prometheus-stack
+        cpu: 200m
+        memory: 256Mi

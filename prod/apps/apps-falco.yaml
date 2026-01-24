@@ -1,0 +1,102 @@
+application: falco
+clusterConfig:
+  namespace: falco-system
+
+chart:
+  name: falco
+  releaseName: falco
+  repoURL: https://falcosecurity.github.io/charts
+  targetRevision: 7.1.1
+
+  values: |
+    falco:
+      sidekick:
+        enabled: true
+        outputs:
+          loki:
+            enabled: true
+            url: http://loki-loki-distributed-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+            batchwait: 5s
+            batchsize: 102400
+            labels:
+              app: falco
+              severity: "{{ .Priority }}"
+
+      jsonOutput: true
+      jsonIncludeOutputProperty: true
+      priority: warning
+
+      # Kubernetes metadata enrichment
+      kubernetes:
+        enabled: true
+
+      # Runtime engine (production recommended)
+      driver:
+        enabled: true
+        kind: ebpf
+
+      # Reduce syscall noise
+      syscallEventDrops:
+        actions:
+          - log
+        rate: 0.03
+        maxBurst: 1000
+
+      # Load only core + custom rules
+      rulesFiles:
+        - /etc/falco/falco_rules.yaml
+        - /etc/falco/falco_rules.local.yaml
+      configMap:
+        name: falco-rules
+
+      # Disable noisy plugins unless explicitly needed
+      plugins:
+        - name: k8saudit
+          enabled: false
+
+      # Prometheus metrics
+      metrics:
+        enabled: true
+        interval: 15s
+        outputRule: true
+        rulesCountersEnabled: true
+
+      outputs:
+        rate: 1
+        maxBurst: 1000
+
+    serviceAccount:
+      create: true
+      name: falco
+      annotations: {}
+
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+
+    securityContext:
+      runAsNonRoot: false
+      privileged: true
+      allowPrivilegeEscalation: true
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+    tolerations:
+      - operator: Exists
+
+    nodeSelector:
+      kubernetes.io/os: linux
+
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+      additionalLabels:
+        release: kube-prometheus-stack
+      namespace: monitoring

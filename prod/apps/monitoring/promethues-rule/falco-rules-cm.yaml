@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falco-rules
+  namespace: falco-system
+  labels:
+    app: falco
+data:
+  falco_rules.local.yaml: |
+    ############################
+    # PRODUCTION RUNTIME RULES #
+    ############################
+
+    ############################
+    # 1. Shell access inside containers
+    ############################
+    - rule: Terminal shell in container
+      desc: Detect interactive shell inside a running container
+      condition: >
+        container
+        and proc.name in (bash, sh, zsh, ash)
+        and not container.image.repository in (
+          "grafana",
+          "prometheus",
+          "busybox"
+        )
+      output: >
+        🚨 Shell spawned inside container
+        (user=%user.name container=%container.name image=%container.image.repository
+        command=%proc.cmdline namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [container, shell, intrusion]
+
+    ############################
+    # 2. Privilege escalation attempts
+    ############################
+    - rule: Privilege escalation inside container
+      desc: Detect sudo, su, or setuid execution in container
+      condition: >
+        container
+        and proc.name in (sudo, su)
+      output: >
+        🔥 Privilege escalation attempt
+        (user=%user.name command=%proc.cmdline container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [container, privilege-escalation]
+
+    ############################
+    # 3. Sensitive file access
+    ############################
+    - rule: Sensitive file read inside container
+      desc: Detect access to sensitive Linux files
+      condition: >
+        container
+        and open_read
+        and fd.name in (
+          "/etc/shadow",
+          "/etc/passwd",
+          "/root/.ssh/id_rsa",
+          "/var/run/secrets/kubernetes.io/serviceaccount/token"
+        )
+      output: >
+        ⚠️ Sensitive file accessed
+        (file=%fd.name container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [container, secrets, credential-access]
+
+    ############################
+    # 4. Unexpected outbound network activity
+    ############################
+    - rule: Suspicious outbound connection from container
+      desc: Detect containers opening unexpected outbound connections
+      condition: >
+        container
+        and outbound
+        and not k8s.ns.name in (
+          "monitoring",
+          "kube-system"
+        )
+      output: >
+        🌐 Unexpected outbound connection
+        (destination=%fd.sip:%fd.sport container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [network, exfiltration]
+
+    ############################
+    # 5. Container writes to root filesystem
+    ############################
+    - rule: Write below root filesystem
+      desc: Detect writes to sensitive root paths
+      condition: >
+        container
+        and open_write
+        and fd.name startswith "/etc"
+      output: >
+        ⚠️ Write to root filesystem
+        (file=%fd.name container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [filesystem, tampering]
+
+    ############################
+    # 6. Kubernetes API token abuse
+    ############################
+    - rule: Kubernetes service account token used unexpectedly
+      desc: Detect access to service account token
+      condition: >
+        container
+        and open_read
+        and fd.name contains "serviceaccount/token"
+        and not k8s.ns.name in (
+          "external-secrets",
+          "cert-manager"
+        )
+      output: >
+        🚨 Kubernetes API token accessed
+        (container=%container.name namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [kubernetes, credentials, lateral-movement]
+
+    ############################
+    # 7. Crypto-mining behavior
+    ############################
+    - rule: Crypto miner execution
+      desc: Detect known crypto mining binaries
+      condition: >
+        container
+        and proc.name in (
+          "xmrig",
+          "minerd",
+          "cryptominer"
+        )
+      output: >
+        🔥 Crypto miner detected
+        (command=%proc.cmdline container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: CRITICAL
+      tags: [crypto, malware]
+
+    ############################
+    # 8. Execution from /tmp
+    ############################
+    - rule: Execution from writable directory
+      desc: Detect execution from /tmp or /var/tmp
+      condition: >
+        container
+        and proc.exe startswith "/tmp"
+      output: >
+        ⚠️ Execution from writable directory
+        (exe=%proc.exe container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [malware, persistence]
+
+    ############################
+    # 9. Unexpected process spawn
+    ############################
+    - rule: Unexpected process in container
+      desc: Detect unexpected long-lived processes
+      condition: >
+        container
+        and proc.name in (nc, netcat, wget, curl)
+      output: >
+        ⚠️ Unexpected process execution
+        (command=%proc.cmdline container=%container.name
+        namespace=%k8s.ns.name pod=%k8s.pod.name)
+      priority: WARNING
+      tags: [command-and-control]
+
+    ############################
+    # 10. Falco self-protection
+    ############################
+    - rule: Falco process tampering
+      desc: Detect attempts to kill Falco
+      condition: >
+        proc.name in (kill, pkill)
+        and proc.args contains "falco"
+      output: >
+        🚨 Falco tampering attempt
+        (user=%user.name command=%proc.cmdline)
+      priority: CRITICAL
+      tags: [falco, tampering]

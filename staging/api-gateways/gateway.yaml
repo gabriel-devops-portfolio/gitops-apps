@@ -20,7 +20,7 @@ spec:
         mode: Terminate
         certificateRefs:
           - kind: Secret
-            name: app-pilotgab-com-tls
+            name: banksystem-com-tls
       allowedRoutes:
         namespaces:
           from: All

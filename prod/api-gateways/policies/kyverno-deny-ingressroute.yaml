@@ -1,0 +1,54 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-traefik-ingressroute
+  annotations:
+    policies.kyverno.io/title: Block Traefik IngressRoute
+    policies.kyverno.io/category: Networking
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/subject: IngressRoute
+    policies.kyverno.io/description: >
+      Prevents usage of Traefik IngressRoute* CRDs.
+      Gateway API (HTTPRoute) must be used for routing.
+      Middleware CRDs are allowed.
+spec:
+  # IMPORTANT:
+  # Keep this in Enforce until platform-admins group
+  # and IRSA/service accounts are fully created.
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: block-ingressroute
+      match:
+        any:
+          - resources:
+              apiGroups:
+                - traefik.io
+              kinds:
+                - IngressRoute
+                - IngressRouteTCP
+                - IngressRouteUDP
+      validate:
+        message: >
+          Traefik IngressRoute is not allowed.
+          Use Gateway API HTTPRoute instead.
+        deny:
+          # 🔒 FUTURE ENFORCEMENT
+          #
+          # conditions:
+          #   all:
+          #     - key: "{{ request.userInfo.groups }}"
+          #       operator: AnyNotIn
+          #       value:
+          #         - platform-admins
+          #
+          #     - key: "{{ request.userInfo.username }}"
+          #       operator: NotIn
+          #       value:
+          #         - system:serviceaccount:platform:argocd-server
+          #
+          # Enable once:
+          # - platform-admins RBAC group exists
+          # - IRSA / GitOps service accounts are in place
+          #
+          conditions: []

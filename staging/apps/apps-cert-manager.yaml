@@ -8,12 +8,8 @@ chart:
   targetRevision: v1.13.0
   values: |
     installCRDs: true
-    replicaCount: 2
+    replicaCount: 1
 
-    rbac:
-      enabled: true
-
-    # Extra arguments for DNS-01 challenges
     extraArgs:
       - --dns01-recursive-nameservers=8.8.8.8:53,8.8.4.4:53
       - --dns01-recursive-nameservers-only
@@ -33,27 +29,13 @@ chart:
         cpu: 500m
         memory: 512Mi
 
-    podSecurityContext:
-      runAsNonRoot: true
-      runAsUser: 65532
-      fsGroup: 65532
-      readOnlyRootFilesystem: true
-      allowPrivilegeEscalation: false
-
-    podDisruptionBudget:
-      enabled: true
-      minAvailable: 1
-
-    # Webhook configuration
     webhook:
-      replicaCount: 2
+      replicaCount: 1
       timeoutSeconds: 30
       hostNetwork: false
       securePort: 10250
       serviceAccount:
         create: true
-        annotations:
-          eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/cert-manager-route53
       certificates:
         selfsign: true
         useCertManager: true
@@ -64,22 +46,9 @@ chart:
         limits:
           cpu: 200m
           memory: 256Mi
-      metrics:
-        enabled: true
-        service:
-          type: ClusterIP
-          port: 9402
-        serviceMonitor:
-          enabled: true
-          namespace: cert-manager
-          interval: 30s
-          scrapeTimeout: 10s
-          labels:
-            release: kube-prometheus-stack
 
-    # CA Injector
     cainjector:
-      replicaCount: 2
+      replicaCount: 1
       resources:
         requests:
           cpu: 50m
@@ -87,20 +56,7 @@ chart:
         limits:
           cpu: 200m
           memory: 256Mi
-      metrics:
-        enabled: true
-        service:
-          type: ClusterIP
-          port: 9402
-        serviceMonitor:
-          enabled: true
-          namespace: cert-manager
-          interval: 30s
-          scrapeTimeout: 10s
-          labels:
-            release: kube-prometheus-stack
 
-    # Startup API check
     startupapicheck:
       timeout: 5m
       backoffLimit: 10
@@ -113,9 +69,3 @@ chart:
         limits:
           cpu: 100m
           memory: 128Mi
-
-    serviceAccount:
-      create: true
-      name: cert-manager
-      annotations:
-        eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/cert-manager-route53

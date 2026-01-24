@@ -1,0 +1,88 @@
+application: penumbra-analytics-service
+clusterConfig:
+  namespace: penumbra
+replicaCount: 1
+image:
+  registry: 485797251250.dkr.ecr.eu-west-1.amazonaws.com
+  repository: penumbra-analytics-service
+  tag: "64aacd0277b8fd45e9cd2189c8e5a4d24715f0f5"
+  pullPolicy: Always
+# ECR image pull secret
+imagePullSecrets:
+  - name: ecr-creds
+# Use existing secret for all environment variables
+existingSecret:
+  name: penumbra-analytics-env
+env:
+  # Logging configuration
+  # UPDATE_INTERVAL_SECONDS: "30"
+  # PENUMBRA_RPC_ENDPOINT: "https://rpc-penumbra.radiantcommons.com"
+  # PENUMBRA_GRPC_ENDPOINT: "https://penumbra.crouton.digital"
+  # PENUMBRA_CHAIN_ID: "penumbra-1"
+  DISCORD_INTERVAL_HOURS: "3"
+  # API_PORT: "8080"
+  # METRICS_PORT: "8082"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  # Discord embed styling
+  DISCORD_EMBED_COLOR: "7447FF"
+  DISCORD_EMBED_THUMBNAIL: "https://cdn.prod.website-files.com/670d31b6956ae869422bc849/6717e5593e8921b1b6d8f6e4_Vectors-Wrapper.svg"
+# Production ingress with TLS
+ingress:
+  enabled: true
+  className: "traefik"
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/service.serversscheme: https
+    traefik.ingress.kubernetes.io/redirect-entry-point: https
+  hosts:
+    - host: penumbra-analytics.radiantcommons.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: rc-com-tls
+      hosts:
+        - penumbra-analytics.radiantcommons.com
+# Production resource limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+# Production health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8082
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 5
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8082
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+# Prometheus monitoring for production
+serviceMonitor:
+  enabled: true
+  namespace: penumbra
+  labels:
+    release: kube-prometheus-stack
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+# Production pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8082"
+  prometheus.io/path: "/metrics"
+metrics:
+  enabled: true

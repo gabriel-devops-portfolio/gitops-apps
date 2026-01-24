@@ -1,0 +1,89 @@
+application: opentelemetry-collector
+clusterConfig:
+  namespace: observability
+
+chart:
+  name: opentelemetry-collector
+  releaseName: otel-collector
+  repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+  targetRevision: 0.143.0
+
+  values: |
+    mode: deployment
+    replicaCount: 2
+
+    serviceAccount:
+      create: true
+      name: otel-collector
+
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+
+    resources:
+      requests:
+        cpu: 300m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      fsGroup: 65532
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+
+    service:
+      type: ClusterIP
+
+    ports:
+      otlp-grpc:
+        enabled: true
+        containerPort: 4317
+
+      metrics:
+        enabled: true
+        containerPort: 8888
+        servicePort: 8888
+        protocol: TCP
+
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+      additionalLabels:
+        release: kube-prometheus-stack
+      namespace: monitoring
+
+    config:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+
+      processors:
+        memory_limiter:
+          check_interval: 1s
+          limit_mib: 512
+
+        batch:
+          timeout: 5s
+
+      exporters:
+        jaeger:
+          endpoint: jaeger-collector.observability.svc.cluster.local:14250
+          tls:
+            insecure: true
+
+      service:
+        telemetry:
+          metrics:
+            address: 0.0.0.0:8888
+
+        pipelines:
+          traces:
+            receivers: [otlp]
+            processors: [memory_limiter, batch]
+            exporters: [jaeger]

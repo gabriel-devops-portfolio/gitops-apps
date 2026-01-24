@@ -1,0 +1,103 @@
+application: kyverno
+clusterConfig:
+  namespace: kyverno
+chart:
+  name: kyverno
+  releaseName: kyverno
+  repoURL: https://kyverno.github.io/kyverno/
+  targetRevision: v2.6.2
+  values: |
+    replicaCount: 2
+
+    rbac:
+      create: true
+    serviceAccount:
+      create: true
+      name: kyverno
+      annotations:
+        # eks.amazonaws.com/role-arn: arn:aws:iam::<AWS_ACCOUNT_ID>:role/kyverno
+      automountServiceAccountToken: true
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      fsGroup: 65532
+      allowPrivilegeEscalation: false
+
+    webhook:
+      replicaCount: 2
+      timeoutSeconds: 30
+      hostNetwork: false
+      serviceAccount:
+        create: false
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+
+    audit:
+      enabled: true
+      logLevel: Info
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    podSecurity:
+      enforce: true
+      level: baseline
+      version: v1.27
+
+    metrics:
+      enabled: true
+      service:
+        type: ClusterIP
+        port: 8443
+      serviceMonitor:
+        enabled: true
+        namespace: kyverno
+        interval: 30s
+        scrapeTimeout: 10s
+        labels:
+          release: prometheus
+        metricRelabelings: []
+
+    installCRDs: true
+    webhookFailurePolicy: Fail
+    backgroundScan: true
+    validationFailureAction: Enforce
+
+    policyReporter:
+      enabled: true
+      service:
+        type: ClusterIP
+        port: 8080
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+      serviceMonitor:
+        enabled: true
+        namespace: kyverno
+        interval: 30s
+        scrapeTimeout: 10s
+        labels:
+          release: kube-prometheus-stack
+        metricRelabelings: []

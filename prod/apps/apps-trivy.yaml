@@ -9,21 +9,43 @@ chart:
   values: |
     trivy:
       ignoreUnfixed: true
+
     operator:
       vulnerabilityScanner: Trivy
+      podSecurityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+
     serviceAccount:
       create: true
       name: trivy-operator
+
     rbac:
       create: true
       clusterRole: true
 
-    serviceMonitor:
+    podDisruptionBudget:
       enabled: true
+      minAvailable: 1
+
     resources:
       requests:
-        cpu: 100m
-        memory: 128Mi
+        cpu: 200m
+        memory: 256Mi
       limits:
-        cpu: 500m
-        memory: 512Mi
+        cpu: 1
+        memory: 1Gi
+
+    serviceMonitor:
+      enabled: true
+      namespace: trivy-system
+      interval: 30s
+      scrapeTimeout: 15s
+      additionalLabels:
+        release: kube-prometheus-stack
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: trivy-operator

@@ -71,7 +71,7 @@ jobs:
 
       - name: Update image tag
         run: |
-          FILE="${{ inputs.environment }}/config/rc-appset/values-${{ inputs.repo_name }}.yaml"
+          FILE="${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml"
 
           if [[ ! -f "$FILE" ]]; then
             echo "File not found: $FILE"
@@ -95,7 +95,7 @@ jobs:
       - name: Commit and push change
         uses: EndBug/add-and-commit@v9
         with:
-          add: ${{ inputs.environment }}/config/rc-appset/values-${{ inputs.repo_name }}.yaml
+          add: ${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml
           message: |
             ${{ inputs.environment }}: deploy ${{ inputs.repo_name }} @ ${{ inputs.commit_id }}
           push: true

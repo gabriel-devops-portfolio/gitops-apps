@@ -1,0 +1,507 @@
+# Calico Policy-Only Mode for EKS Production
+# This configuration enables NetworkPolicy enforcement while using AWS VPC CNI for networking
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tigera-operator
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+    name: tigera-operator
+  annotations:
+    # Backup this namespace
+    velero.io/backup: "true"
+
+---
+# ServiceAccount for Tigera Operator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+  labels:
+    app.kubernetes.io/name: tigera-operator
+    app.kubernetes.io/component: operator
+
+---
+# ClusterRole for Tigera Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tigera-operator
+  labels:
+    app.kubernetes.io/name: tigera-operator
+rules:
+  - apiGroups: [""]
+    resources:
+      [
+        "namespaces",
+        "pods",
+        "podtemplates",
+        "services",
+        "endpoints",
+        "events",
+        "configmaps",
+        "secrets",
+        "nodes",
+        "serviceaccounts",
+      ]
+    verbs: ["create", "get", "list", "update", "delete", "watch"]
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["list", "get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "replicasets"]
+    verbs: ["create", "get", "list", "patch", "update", "delete", "watch"]
+  - apiGroups: ["apps"]
+    resourceNames: ["tigera-operator"]
+    resources: ["deployments/finalizers"]
+    verbs: ["update"]
+  - apiGroups: ["operator.tigera.io"]
+    resources: ["*"]
+    verbs: ["create", "get", "list", "update", "patch", "delete", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "create", "update", "delete", "watch"]
+  - apiGroups: ["crd.projectcalico.org"]
+    resources: ["*"]
+    verbs: ["create", "get", "list", "update", "delete", "watch"]
+  - apiGroups: ["scheduling.k8s.io"]
+    resources: ["priorityclasses"]
+    verbs: ["create", "get", "list", "update", "delete", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["create", "get", "list", "update", "delete", "watch"]
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["list", "watch", "create", "update"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "list", "update", "delete", "watch"]
+
+---
+# ClusterRoleBinding for Tigera Operator
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tigera-operator
+  labels:
+    app.kubernetes.io/name: tigera-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: tigera-operator
+subjects:
+  - kind: ServiceAccount
+    name: tigera-operator
+    namespace: tigera-operator
+
+---
+# Tigera Operator Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+  labels:
+    app.kubernetes.io/name: tigera-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/version: "v1.33.3"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: tigera-operator
+  template:
+    metadata:
+      labels:
+        name: tigera-operator
+        app.kubernetes.io/name: tigera-operator
+        app.kubernetes.io/component: operator
+      annotations:
+        # Force pod restart on config changes
+        kubectl.kubernetes.io/restartedAt: "2024-01-20T00:00:00Z"
+    spec:
+      serviceAccountName: tigera-operator
+      hostNetwork: true
+      # Security context for production
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      # Node selection for control plane nodes (optional)
+      nodeSelector:
+        kubernetes.io/os: linux
+      # Tolerations for control plane nodes
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      # Anti-affinity to avoid single point of failure
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    name: tigera-operator
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: tigera-operator
+          image: quay.io/tigera/operator:v1.33.3
+          imagePullPolicy: IfNotPresent
+          # Security context for container
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          # Resource limits for production
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # Environment variables
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "tigera-operator"
+            - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
+              value: "v1.33.3"
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: 9443
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Volume mounts for temporary files
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# Calico Installation Configuration
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: installation
+spec:
+  # Calico variant - use Calico for policy enforcement only
+  variant: Calico
+
+  # Registry configuration for air-gapped environments (optional)
+  registry: quay.io/
+
+  # Image pull secrets (if needed for private registries)
+  # imagePullSecrets:
+  # - name: tigera-pull-secret
+
+  # 🔒 Disable Calico networking completely - AWS VPC CNI handles networking
+  calicoNetwork:
+    bgp: Disabled
+    hostPorts: Disabled
+    ipPools: []
+    nodeAddressAutodetectionV4:
+      skipInterface: "docker.*"
+
+  # 👇 This tells Calico NOT to manage pod networking
+  cni:
+    type: AmazonVPC
+
+  # Control plane configuration
+  controlPlaneReplicas: 1
+
+  # Node update strategy
+  nodeUpdateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+
+  # Component resource requirements
+  componentResources:
+    - componentName: Node
+      resourceRequirements:
+        requests:
+          cpu: 250m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    - componentName: Typha
+      resourceRequirements:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 300m
+          memory: 256Mi
+
+  # Node selector for Linux nodes only
+  nodeSelector:
+    kubernetes.io/os: linux
+
+  # Tolerations for system nodes
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+    - key: node.kubernetes.io/not-ready
+      operator: Exists
+      effect: NoExecute
+      tolerationSeconds: 300
+    - key: node.kubernetes.io/unreachable
+      operator: Exists
+      effect: NoExecute
+      tolerationSeconds: 300
+
+---
+# API Server Configuration
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: apiserver
+spec:
+  # Enable API server for policy management
+  # This provides a REST API for Calico resources
+  {}
+
+---
+# Felix Configuration for Production
+apiVersion: operator.tigera.io/v1
+kind: FelixConfiguration
+metadata:
+  name: default
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: felix
+spec:
+  # Logging configuration
+  logSeverityScreen: Info
+  logSeverityFile: Info
+
+  # Policy sync configuration
+  policySyncPathPrefix: "/var/run/nodeagent"
+
+  # Prometheus metrics
+  prometheusMetricsEnabled: true
+  prometheusMetricsPort: 9091
+
+  # Performance tuning for production
+  reportingInterval: 30s
+  reportingTTL: 90s
+
+  # Health check configuration
+  healthEnabled: true
+  healthHost: "0.0.0.0"
+  healthPort: 9099
+
+  # BPF configuration (if supported)
+  bpfEnabled: false
+
+  # Failsafe configuration
+  failsafeInboundHostPorts:
+    - protocol: tcp
+      port: 22 # SSH
+    - protocol: tcp
+      port: 6443 # Kubernetes API
+    - protocol: tcp
+      port: 2379 # etcd client
+    - protocol: tcp
+      port: 2380 # etcd peer
+
+  failsafeOutboundHostPorts:
+    - protocol: tcp
+      port: 53 # DNS
+    - protocol: udp
+      port: 53 # DNS
+    - protocol: tcp
+      port: 443 # HTTPS
+    - protocol: tcp
+      port: 2379 # etcd client
+    - protocol: tcp
+      port: 2380 # etcd peer
+    - protocol: tcp
+      port: 6443 # Kubernetes API
+
+  # Network interface configuration
+  interfacePrefix: "cali"
+
+  # IP forwarding
+  ipForward: "Enabled"
+
+  # Default endpoint to host action
+  defaultEndpointToHostAction: "ACCEPT"
+
+  # Workload endpoint failure action
+  workloadSourceSpoofing: "Any"
+
+---
+# Global Network Policy for Default Deny (Security Best Practice)
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: default-deny-all
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: policy
+spec:
+  # Apply to all namespaces except system namespaces
+  namespaceSelector: "!has(name) || (name != 'kube-system' && name != 'kube-public' && name != 'kube-node-lease' && name != 'tigera-operator')"
+
+  # Default deny all ingress and egress
+  types:
+    - Ingress
+    - Egress
+
+  # Allow egress to DNS and system services
+  egress:
+    - action: Allow
+      protocol: UDP
+      destination:
+        ports: [53]
+    - action: Allow
+      protocol: TCP
+      destination:
+        ports: [53]
+    # Allow egress to Kubernetes API
+    - action: Allow
+      protocol: TCP
+      destination:
+        services:
+          name: kubernetes
+          namespace: default
+
+---
+# Network Policy for Tigera Operator Namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tigera-operator-policy
+  namespace: tigera-operator
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # Allow all egress for operator functionality
+  egress:
+    - {}
+
+  # Allow ingress for health checks and metrics
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 9443 # Operator webhook
+        - protocol: TCP
+          port: 8080 # Health check
+        - protocol: TCP
+          port: 9091 # Metrics
+
+---
+# ServiceMonitor for kube-prometheus-stack
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: calico-felix
+  namespace: tigera-operator
+  labels:
+    app.kubernetes.io/name: calico
+    app.kubernetes.io/component: monitoring
+    # Labels for kube-prometheus-stack discovery
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      k8s-app: calico-felix
+  endpoints:
+    - port: prometheus-metrics
+      interval: 30s
+      path: /metrics
+      # Optional: Add relabeling for better metric organization
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+      # Optional: Metric relabeling to add cluster info
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "felix_.*"
+          targetLabel: component
+          replacement: "calico-felix"
+  namespaceSelector:
+    matchNames:
+      - calico-system
+  # Optional: Add job label for better organization in Prometheus
+  jobLabel: "k8s-app"
+
+---
+# PodDisruptionBudget for Tigera Operator
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tigera-operator-pdb
+  namespace: tigera-operator
+  labels:
+    app.kubernetes.io/name: tigera-operator
+    app.kubernetes.io/component: operator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      name: tigera-operator

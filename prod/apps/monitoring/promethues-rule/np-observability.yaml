@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: observability-deny-all-ingress
+  namespace: observability
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-to-observability
+  namespace: observability
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 16686 # Jaeger UI
+        - protocol: TCP
+          port: 8888 # OTel metrics
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-apps-to-otel-traces
+  namespace: observability
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              telemetry: enabled
+      ports:
+        - protocol: TCP
+          port: 4317
+# note: kubectl label namespace banksystem telemetry=enabled

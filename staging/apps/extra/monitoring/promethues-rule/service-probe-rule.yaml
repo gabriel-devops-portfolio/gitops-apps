@@ -1,0 +1,29 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: service-probe-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+    prometheus: prometheus
+spec:
+  groups:
+    - name: gateway-and-static-probe.rules
+      rules:
+        - alert: ServiceDown
+          expr: |
+            probe_success{job=~"probe/monitoring/.*"} == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Service {{ $labels.target }} is down"
+            description: |
+              The Blackbox probe for {{ $labels.target }} has been failing for more than 3 minutes.
+              {{- if $labels.route }}
+              HTTPRoute: {{ $labels.route }}
+              Namespace: {{ $labels.namespace }}
+              {{- else }}
+              Static endpoint
+              {{- end }}
+              Check connectivity, service, or route/backend health.

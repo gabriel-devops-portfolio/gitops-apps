@@ -1,0 +1,101 @@
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: bank-app-nodes
+  namespace: karpenter
+spec:
+  amiFamily: AL2
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "pilotgab-prod"
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "pilotgab-prod"
+  instanceProfile: "KarpenterNodeInstanceProfile-pilotgab-prod"
+  amiSelectorTerms:
+    - alias: al2@latest
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 100Gi
+        volumeType: gp3
+        deleteOnTermination: true
+        encrypted: true
+        kmsKeyID: <EKS_KMS_KEY_ARN>
+  tags:
+    karpenter.sh/discovery: "pilotgab-prod"
+  userData: |
+    #!/bin/bash
+    echo "Running custom userdata script for Penumbra nodes"
+    # Optimize for blockchain workloads
+    sysctl -w vm.max_map_count=262144
+    sysctl -w vm.swappiness=1
+
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2
+  instanceProfile: "KarpenterNodeInstanceProfile-pilotgab-prod"
+  amiSelectorTerms:
+    - alias: al2@latest
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        deleteOnTermination: true
+        volumeSize: 250Gi
+        volumeType: gp3
+        encrypted: true
+        kmsKeyID: <EKS_KMS_KEY_ARN>
+  metadataOptions:
+    httpEndpoint: enabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pilotgab-prod
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pilotgab-prod
+
+---
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: kubelet-custom
+spec:
+  amiFamily: AL2
+  instanceProfile: "KarpenterNodeInstanceProfile-pilotgab-prod"
+  amiSelectorTerms:
+    - alias: al2@latest
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pilotgab-prod
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: pilotgab-prod
+  metadataOptions:
+    httpEndpoint: enabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 150Gi
+        volumeType: gp3
+        deleteOnTermination: true
+        encrypted: true
+        kmsKeyID: <EKS_KMS_KEY_ARN>
+  userData: |
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary="BOUNDARY"
+
+    --BOUNDARY
+    Content-Type: text/x-shellscript; charset="us-ascii"
+
+    #!/bin/bash
+    echo "$(jq '.registryPullQPS=50|.registryBurst=100|.maxPods=250' /etc/kubernetes/kubelet/kubelet-config.json)" > /etc/kubernetes/kubelet/kubelet-config.json
+
+    --BOUNDARY--

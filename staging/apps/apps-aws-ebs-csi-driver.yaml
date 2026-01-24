@@ -1,0 +1,54 @@
+application: aws-ebs-csi-driver
+clusterConfig:
+  namespace: kube-system
+
+chart:
+  name: aws-ebs-csi-driver
+  releaseName: aws-ebs-csi-driver
+  repoURL: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+  targetRevision: v1.54.0
+
+  values: |
+    rbac:
+      create: true
+
+    controller:
+      replicaCount: 2
+
+      serviceAccount:
+        create: true
+        name: ebs-csi-controller-sa
+        annotations:
+          eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/AmazonEKS_EBS_CSI_DriverRole
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+      metrics:
+        enabled: true
+        service:
+          enabled: true
+          port: 8080
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "8080"
+
+    node:
+      serviceAccount:
+        create: true
+        name: ebs-csi-node-sa
+
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+
+    storageClasses: []

@@ -1,0 +1,137 @@
+graph TB
+    %% Unified Grafana Dashboard
+    subgraph "Unified Grafana Dashboard - Single Pane of Glass"
+        GF[Grafana<br/>Real-time Monitoring & Analytics]
+    end
+
+    %% Four Pillars of Observability
+    subgraph "Four Pillars of Observability"
+        subgraph "METRICS"
+            PROM[Prometheus]
+            AM[AlertManager]
+            BE[Blackbox Exporter]
+            NE[Node Exporter]
+        end
+
+        subgraph "Alert Routing"
+            AR[AlertManager Routing<br/>Group by: alertname, cluster, service<br/>Group wait: 10s<br/>Repeat interval: 1h]
+
+            %% Alert Channels
+            CRIT[Slack #critical-alerts<br/>15min SLA]
+            WARN[Slack #warnings<br/>1hr SLA]
+            SEC[Slack #security-team<br/>5min SLA]
+            PD[PagerDuty<br/>5min escalation]
+            SOC[SOC Team<br/>Immediate]
+            EMAIL[Email Notifications]
+            WEBHOOK[Webhook Integration]
+        end
+
+        subgraph "LOGS"
+            LOKI[Loki Distributed<br/>Log Storage & Querying]
+            PT[Promtail<br/>Log Collection DaemonSet]
+            AL[Application Logs<br/>Pod stdout/stderr]
+            SL[System Logs<br/>Kubernetes events]
+        end
+
+        subgraph "TRACES"
+            JAEGER[Jaeger<br/>Distributed Tracing Backend]
+            OTEL[OpenTelemetry Collector<br/>Trace Collection]
+            DT[Distributed Tracing<br/>Request flows]
+            SM[Service Maps<br/>Dependency visualization]
+        end
+
+        subgraph "SECURITY"
+            OS[OpenSearch]
+            LAKE[Security Lake]
+            OCSF[OCSF Data]
+            SIEM[SIEM Analytics]
+        end
+    end
+
+    %% Data Sources
+    subgraph "Data Sources"
+        subgraph "Metrics Sources"
+            EKS_M[EKS Cluster Metrics]
+            APP_M[Application Metrics]
+            INFRA_M[Infrastructure Metrics]
+        end
+
+        subgraph "Log Sources"
+            POD_L[Pod Logs]
+            SYS_L[System Logs]
+            AUDIT_L[Audit Logs]
+        end
+
+        subgraph "Trace Sources"
+            HTTP_T[HTTP Requests]
+            DB_T[Database Calls]
+            SVC_T[Service Calls]
+        end
+
+        subgraph "Security Sources"
+            CT[CloudTrail]
+            VPC[VPC Flow Logs]
+            SH[Security Hub]
+            R53[Route53 Logs]
+        end
+    end
+
+    %% Cross-Account Integration
+    subgraph "Cross-Account Security Integration"
+        WA[Workload Account<br/>EKS]
+        SA[Security Account<br/>OpenSearch]
+    end
+
+    %% Data Flow Arrows
+    EKS_M --> PROM
+    APP_M --> PROM
+    INFRA_M --> PROM
+
+    POD_L --> PT
+    SYS_L --> PT
+    AUDIT_L --> PT
+    PT --> LOKI
+
+    HTTP_T --> OTEL
+    DB_T --> OTEL
+    SVC_T --> OTEL
+    OTEL --> JAEGER
+
+    CT --> LAKE
+    VPC --> LAKE
+    SH --> LAKE
+    R53 --> LAKE
+    LAKE --> OS
+
+    PROM --> GF
+    LOKI --> GF
+    JAEGER --> GF
+    OS --> GF
+
+    %% Alert Flows
+    AM --> AR
+    AR -->|Critical| CRIT
+    AR -->|Warning| WARN
+    AR -->|Security| SEC
+    CRIT -->|Escalation| PD
+    SEC -->|Escalation| SOC
+    AR --> EMAIL
+    AR --> WEBHOOK
+
+    %% Cross-Account
+    WA <-->|IAM Cross-Account Roles| SA
+
+    %% Styling
+    classDef metrics fill:#90EE90
+    classDef logs fill:#FFA500
+    classDef traces fill:#9370DB
+    classDef security fill:#FF6B6B
+    classDef alerts fill:#FFD700
+    classDef grafana fill:#4169E1
+
+    class PROM,AM,BE,NE metrics
+    class LOKI,PT,AL,SL logs
+    class JAEGER,OTEL,DT,SM traces
+    class OS,LAKE,OCSF,SIEM security
+    class AR,CRIT,WARN,SEC,PD,SOC,EMAIL,WEBHOOK alerts
+    class GF grafana

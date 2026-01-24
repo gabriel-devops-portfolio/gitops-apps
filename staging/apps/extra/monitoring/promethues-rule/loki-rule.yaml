@@ -1,0 +1,85 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: loki-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: loki.rules
+      rules:
+
+        # ----------------------------------
+        # Loki ingestion stopped (real signal)
+        # ----------------------------------
+        - alert: LokiIngestionStopped
+          expr: |
+            sum(rate(loki_ingester_ingested_entries_total[5m])) == 0
+            and
+            sum(up{app_kubernetes_io_name="promtail"}) > 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Loki ingestion stopped"
+            description: "Promtail is running but Loki is not ingesting logs"
+
+        # ----------------------------------
+        # High ingestion rate
+        # ----------------------------------
+        - alert: LokiHighIngestionRate
+          expr: sum(rate(loki_ingester_ingested_bytes_total[5m])) > 100000000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High Loki ingestion rate"
+            description: "Log ingestion exceeds 100MB/s — investigate noisy workloads"
+
+        # ----------------------------------
+        # Promtail dropping logs
+        # ----------------------------------
+        - alert: PromtailDroppedLogs
+          expr: sum(rate(promtail_dropped_entries_total[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Promtail is dropping logs"
+            description: "Promtail is unable to keep up with log volume"
+
+        # ----------------------------------
+        # Loki ring unhealthy
+        # ----------------------------------
+        - alert: LokiRingUnhealthy
+          expr: sum(loki_ring_members{state!="ACTIVE"}) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Loki ring has unhealthy members"
+            description: "One or more Loki components are not ACTIVE"
+
+        # ----------------------------------
+        # Loki WAL errors
+        # ----------------------------------
+        - alert: LokiWALErrors
+          expr: rate(loki_ingester_wal_failed_appends_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Loki WAL write failures"
+            description: "Loki is failing to write to WAL — risk of data loss"
+
+        # ----------------------------------
+        # Loki request errors
+        # ----------------------------------
+        - alert: LokiRequestErrors
+          expr: |
+            sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki is returning 5xx errors"
+            description: "Investigate Loki service health"

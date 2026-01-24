@@ -1,0 +1,115 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: slack-config
+  namespace: monitoring
+  labels:
+    alertmanager: "true"
+spec:
+  route:
+    receiver: slack-default
+    groupBy: ["alertname", "namespace", "instance", "route"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+
+    routes:
+      - matchers:
+          - name: severity
+            value: critical
+        receiver: slack-critical
+        repeatInterval: 30m
+
+      - matchers:
+          - name: severity
+            value: warning
+        receiver: slack-warning
+        repeatInterval: 2h
+
+      - matchers:
+          - name: severity
+            value: info
+        receiver: slack-info
+        repeatInterval: 12h
+
+  receivers:
+    - name: slack-default
+      slackConfigs:
+        - apiURL:
+            name: slack-webhook
+            key: url
+          channel: "grafana-alerts"
+          sendResolved: true
+          title: "*{{ .CommonLabels.alertname }}* ({{ .Status | toUpper }})"
+          text: |
+            *Status:* `{{ .Status | toUpper }}`
+            *Severity:* `{{ .CommonLabels.severity }}`
+            *Namespace:* `{{ .CommonLabels.namespace }}`
+            *Instance:* `{{ .CommonLabels.instance }}`
+            {{- if .CommonLabels.route }}
+            *Route:* `{{ .CommonLabels.route }}`
+            {{- else }}
+            *Target:* `{{ .CommonLabels.target }}`
+            {{- end }}
+            *Summary:* {{ .CommonAnnotations.summary }}
+            *Description:* {{ .CommonAnnotations.description }}
+
+    - name: slack-critical
+      slackConfigs:
+        - apiURL:
+            name: slack-webhook
+            key: url
+          channel: "grafana-alerts-critical"
+          sendResolved: true
+          title: "🔥 *CRITICAL:* {{ .CommonLabels.alertname }}"
+          text: |
+            *Namespace:* `{{ .CommonLabels.namespace }}`
+            *Instance:* `{{ .CommonLabels.instance }}`
+            {{- if .CommonLabels.route }}
+            *Route:* `{{ .CommonLabels.route }}`
+            {{- else }}
+            *Target:* `{{ .CommonLabels.target }}`
+            {{- end }}
+            *Summary:* {{ .CommonAnnotations.summary }}
+            *Description:* {{ .CommonAnnotations.description }}
+          color: "#FF0000"
+
+    - name: slack-warning
+      slackConfigs:
+        - apiURL:
+            name: slack-webhook
+            key: url
+          channel: "grafana-alerts-warning"
+          sendResolved: true
+          title: "⚠️ *WARNING:* {{ .CommonLabels.alertname }}"
+          text: |
+            *Namespace:* `{{ .CommonLabels.namespace }}`
+            *Instance:* `{{ .CommonLabels.instance }}`
+            {{- if .CommonLabels.route }}
+            *Route:* `{{ .CommonLabels.route }}`
+            {{- else }}
+            *Target:* `{{ .CommonLabels.target }}`
+            {{- end }}
+            *Summary:* {{ .CommonAnnotations.summary }}
+            *Description:* {{ .CommonAnnotations.description }}
+          color: "#FFA500"
+
+    - name: slack-info
+      slackConfigs:
+        - apiURL:
+            name: slack-webhook
+            key: url
+          channel: "grafana-alerts-info"
+          sendResolved: false
+          title: "ℹ️ *INFO:* {{ .CommonLabels.alertname }}"
+          text: |
+            *Namespace:* `{{ .CommonLabels.namespace }}`
+            *Instance:* `{{ .CommonLabels.instance }}`
+            {{- if .CommonLabels.route }}
+            *Route:* `{{ .CommonLabels.route }}`
+            {{- else }}
+            *Target:* `{{ .CommonLabels.target }}`
+            {{- end }}
+            *Summary:* {{ .CommonAnnotations.summary }}
+            *Description:* {{ .CommonAnnotations.description }}
+          color: "#36a64f"

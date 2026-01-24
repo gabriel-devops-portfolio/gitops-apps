@@ -7,13 +7,11 @@ chart:
   repoURL: https://kubernetes-sigs.github.io/metrics-server/
   targetRevision: v0.8.4
   values: |
-    replicaCount: 2
-
     args:
+      - --kubelet-insecure-tls
       - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname,InternalDNS,ExternalDNS
       - --kubelet-use-node-status-port
       - --metric-resolution=15s
-      # --kubelet-insecure-tls  # remove in production if kubelet certs are valid
 
     serviceAccount:
       create: true
@@ -30,26 +28,3 @@ chart:
       limits:
         cpu: 200m
         memory: 256Mi
-
-    securityContext:
-      runAsNonRoot: true
-      runAsUser: 65532
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
-      fsGroup: 65532
-
-    podDisruptionBudget:
-      enabled: true
-      minAvailable: 1
-
-    metrics:
-      enabled: true
-      serviceMonitor:
-        enabled: true
-        namespaceSelector:
-          matchNames:
-            - kube-system
-        selector:
-          matchLabels:
-            release: kube-prometheus-stack
-        interval: 30s

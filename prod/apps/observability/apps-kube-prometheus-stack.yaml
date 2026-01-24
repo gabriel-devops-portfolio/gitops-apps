@@ -1,0 +1,262 @@
+application: kube-prometheus-stack
+clusterConfig:
+  namespace: monitoring
+chart:
+  name: kube-prometheus-stack
+  releaseName: kube-prometheus-stack
+  repoURL: https://prometheus-community.github.io/helm-charts
+  targetRevision: 80.13.3
+  values: |
+    rbac:
+      create: true
+
+    prometheus:
+      prometheusSpec:
+        replicas: 2
+        replicaExternalLabelName: "__replica__"
+        ruleSelectorNilUsesHelmValues: false
+        prometheusExternalLabelName: "prometheus"
+        serviceMonitorSelectorNilUsesHelmValues: false
+        serviceMonitorSelector: {}
+        serviceMonitorNamespaceSelector: {}
+        probeSelectorNilUsesHelmValues: false
+        probeNamespaceSelector: {}
+        podMonitorSelectorNilUsesHelmValues: false
+        retention: 15d
+        enableAdminAPI: false
+        walCompression: true
+        ruleSelector:
+          matchExpressions:
+            - key: prometheus
+              operator: In
+              values:
+              - prometheus
+        extraScrapeConfigs: |
+          - job_name: karpenter
+            kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                - karpenter
+            relabel_configs:
+            - source_labels:
+              - __meta_kubernetes_endpoints_name
+              - __meta_kubernetes_endpoint_port_name
+              action: keep
+              regex: karpenter;http-metrics
+        storageSpec:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: gp3-kms
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 100Gi
+        resources:
+          requests:
+            cpu: 2
+            memory: 4Gi
+          limits:
+            cpu: 4
+            memory: 8Gi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          fsGroup: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+        podDisruptionBudget:
+          enabled: true
+          minAvailable: 1
+        extraLabels:
+          app: prometheus
+
+    alertmanager:
+      alertmanagerSpec:
+        replicas: 3
+        alertmanagerConfigSelector:
+          matchLabels:
+            alertmanager: "true"
+        logLevel: info
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1
+            memory: 1Gi
+        podDisruptionBudget:
+          enabled: true
+          minAvailable: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 65532
+          fsGroup: 65532
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: gp3-kms
+              accessModes:
+                - ReadWriteOnce
+              resources:
+                requests:
+                  storage: 50Gi
+
+    grafana:
+      admin:
+        existingSecret: grafana-basic-auths
+        userKey: admin-user
+        passwordKey: admin-password
+      initChownData:
+        enabled: false
+      existingSecret: grafana-basic-auths
+      grafana.ini:
+        live:
+          enabled: false
+        server:
+          root_url: https://grafana-prod.app.pilotgab.com/
+        users:
+          viewers_can_edit: true
+        auth:
+          disable_login_form: false
+          anonymous_enabled: false
+      dashboardProviders:
+        dashboardproviders.yaml:
+          apiVersion: 1
+          providers:
+          - name: 'default'
+            orgId: 1
+            folder: ''
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards/default
+      dashboards:
+        default:
+          default-dashboard:
+            gnetId: 15661
+            datasource: Prometheus
+      sidecar:
+        dashboards:
+          enabled: true
+        datasources:
+          defaultDatasourceEnabled: true
+      additionalDataSources:
+        - name: Loki
+          type: loki
+          url: http://loki-loki-distributed-query-frontend.monitoring.svc.cluster.local:3100
+
+        - name: Jaeger
+          type: jaeger
+          access: proxy
+          url: http://jaeger-query.observability.svc.cluster.local:16686
+          isDefault: false
+
+        - name: OpenSearch-SecurityLogs
+          type: opensearch
+          access: proxy
+          url: https://search-security-logs-<DOMAIN-SUFFIX>.us-east-1.es.amazonaws.com
+          isDefault: false
+          jsonData:
+            timeField: "@timestamp"
+            esVersion: "8.0.0"
+            maxConcurrentShardRequests: 5
+            includeFrozen: false
+            logMessageField: "message"
+            logLevelField: "severity"
+            # Security Lake OCSF fields
+            interval: "Daily"
+            timeInterval: "10s"
+            # Enable advanced features
+            sigV4Auth: true
+            sigV4Region: us-east-1
+            sigV4AssumeRoleArn: "arn:aws:iam::<SECURITY-ACCOUNT-ID>:role/GrafanaOpenSearchRole"
+          secureJsonData:
+            # Authentication will be handled via IAM roles (IRSA)
+            sigV4AccessKey: ""
+            sigV4SecretKey: ""
+
+        - name: OpenSearch-AppLogs
+          type: opensearch
+          access: proxy
+          url: https://search-security-logs-<DOMAIN-SUFFIX>.us-east-1.es.amazonaws.com
+          isDefault: false
+          jsonData:
+            database: "application-logs-*"
+            timeField: "@timestamp"
+            esVersion: "8.0.0"
+            maxConcurrentShardRequests: 5
+            includeFrozen: false
+            logMessageField: "message"
+            logLevelField: "level"
+            interval: "Daily"
+            timeInterval: "10s"
+            sigV4Auth: true
+            sigV4Region: us-east-1
+            sigV4AssumeRoleArn: "arn:aws:iam::<SECURITY-ACCOUNT-ID>:role/GrafanaOpenSearchRole"
+          secureJsonData:
+            sigV4AccessKey: ""
+            sigV4SecretKey: ""
+
+      persistence:
+        enabled: true
+        storageClassName: gp3-kms
+        accessModes:
+          - ReadWriteOnce
+        size: 20Gi
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2
+          memory: 4Gi
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+
+    kube-state-metrics:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false
+
+    prometheus-node-exporter:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1
+          memory: 1Gi
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+        readOnlyRootFilesystem: true
+        allowPrivilegeEscalation: false

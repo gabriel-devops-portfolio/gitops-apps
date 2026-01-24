@@ -1,0 +1,30 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: falco-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: falco.rules
+      rules:
+        - alert: FalcoCriticalEvent
+          expr: falco_event_priority_total{priority="CRITICAL"} > 0
+          for: 1m
+          labels:
+            severity: critical
+            team: security
+          annotations:
+            summary: "Falco detected a critical runtime event"
+            description: "Falco reported one or more critical events in the last minute. Investigate immediately."
+
+        - alert: FalcoWarningEvent
+          expr: falco_event_priority_total{priority="WARNING"} > 0
+          for: 2m
+          labels:
+            severity: warning
+            team: security
+          annotations:
+            summary: "Falco detected a warning runtime event"
+            description: "Falco reported one or more warning events in the last 2 minutes. Check for potential issues."

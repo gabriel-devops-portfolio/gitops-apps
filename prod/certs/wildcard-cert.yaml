@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: app-pilotgab-com
+  namespace: gateway-system
+spec:
+  secretName: app-pilotgab-com-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-prod
+  dnsNames:
+    - app.pilotgab.com
+    - "*.app.pilotgab.com"

@@ -1,0 +1,505 @@
+# Production Network Policies for EKS with Calico
+# These policies provide secure defaults and common patterns for production workloads
+
+---
+# Allow DNS resolution for all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-access
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+---
+# Allow access to Kubernetes API server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kubernetes-api
+  namespace: default
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+---
+# Production namespace network policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: production-namespace-policy
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  # Default deny all ingress
+  ingress: []
+
+  # Allow egress to DNS, Kubernetes API, and same namespace
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+  # Same namespace communication
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: production
+
+---
+# Web tier network policy (frontend applications)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-tier-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      tier: web
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress from load balancer
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090  # Metrics
+
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+  # Allow egress to API tier
+  - to:
+    - podSelector:
+        matchLabels:
+          tier: api
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 3000
+
+---
+# API tier network policy (backend services)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-tier-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      tier: api
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress from web tier
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: web
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 3000
+
+  # Allow ingress from other API services
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: api
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 3000
+
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+ports:
+    - protocol: TCP
+      port: 9090  # Metrics
+
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+  # Allow egress to database tier
+  - to:
+    - podSelector:
+        matchLabels:
+          tier: database
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 3306  # MySQL
+    - protocol: TCP
+      port: 6379  # Redis
+
+  # Allow egress to external services (HTTPS only)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Database tier network policy (most restrictive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-tier-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      tier: database
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Only allow ingress from API tier
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: api
+    ports:
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 3306  # MySQL
+    - protocol: TCP
+      port: 6379  # Redis
+
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9090  # Metrics
+
+  egress:
+  # DNS only
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API for health checks
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+---
+# Monitoring namespace policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-policy
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress from anywhere for monitoring access
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 9090  # Prometheus
+    - protocol: TCP
+      port: 3000  # Grafana
+    - protocol: TCP
+      port: 9093  # Alertmanager
+
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+  # Allow egress to scrape metrics from all namespaces
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 9090
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 9091  # Calico Felix metrics
+
+---
+# ArgoCD namespace policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: argocd-policy
+  namespace: argocd
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress for ArgoCD UI and API
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API (ArgoCD needs full access)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+  # Git repositories (HTTPS)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 22   # SSH for Git
+
+---
+# Kube-system namespace policy (system components)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-system-policy
+  namespace: kube-system
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  # Allow all traffic for system components
+  ingress:
+  - from: []
+
+  egress:
+  - to: []
+
+---
+# Velero namespace policy (backup system)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: velero-policy
+  namespace: velero
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress for monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8085  # Velero metrics
+
+  egress:
+  # DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+
+  # Kubernetes API (Velero needs full access)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443
+
+  # AWS S3 (HTTPS)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Staging namespace policy (less restrictive than production)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: staging-policy
+  namespace: staging
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress from load balancer
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 8080
+
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+
+  egress:
+  # Allow all egress for staging (more permissive)
+  - to: []
+
+---
+# Development namespace policy (most permissive)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: development-policy
+  namespace: development
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+
+  # Allow all traffic in development
+  ingress:
+  - from: []
+
+  egress:
+  - to: []

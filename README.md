@@ -23,6 +23,12 @@
 
 This repository implements a **secure, scalable, enterprise-grade GitOps architecture** using ArgoCD-based continuous delivery principles. It serves as the **single source of truth** for all Kubernetes deployments across staging and production environments.
 
+## 🏗️ Enterprise GitOps Methodology
+
+![Enterprise GitOps Methodology](./enterprise-gitops-methodology.png)
+
+_Complete enterprise GitOps methodology showing the zero-trust CI/CD pipeline with three-repository architecture, security boundaries, environment protection gates, and ArgoCD-driven continuous delivery suitable for regulated environments._
+
 ### Key Characteristics
 
 - ✅ **GitOps Authority**: ArgoCD continuously watches this repository
@@ -30,6 +36,17 @@ This repository implements a **secure, scalable, enterprise-grade GitOps archite
 - ✅ **Zero-Trust Boundary**: No CI pipeline has direct access to the Kubernetes cluster
 - ✅ **Separation of Concerns**: No application code is stored here
 - ✅ **Audit Trail**: Full Git history of all deployment changes
+
+### Architecture Highlights
+
+The methodology diagram above illustrates our comprehensive GitOps implementation featuring:
+
+- **Three-Repository Architecture** - Clear separation between application code, CI/CD templates, and deployment manifests
+- **Zero-Trust Security Model** - No direct CI pipeline access to Kubernetes cluster, Git as the only deployment boundary
+- **Environment Protection Gates** - Automated staging deployments with manual production approvals
+- **Immutable Artifacts** - SHA-based container image tagging with complete audit trail
+- **ArgoCD Continuous Reconciliation** - Pull-based deployment with self-healing and automated sync
+- **Enterprise Compliance** - SOC 2 Type II, PCI-DSS, and HIPAA-ready architecture
 
 ---
 
@@ -98,51 +115,40 @@ This architecture enforces enterprise-grade security and operational practices:
 gitops-apps/
 ├── .github/
 │   └── workflows/
-│       └── gitops-commit.yaml        # GitOps deployment automation
+│       └── gitops-commit.yml         # GitOps deployment automation
 │
 ├── staging/                          # Staging environment
 │   ├── config/
-│   │   └── bank-appset/                # Helm values per application
-│   │       ├── values-barista-val-cafe.yaml
-│   │       ├── values-cleanwork-va-service.yaml
-│   │       ├── values-penumbra-node-helm.yaml
-│   │       ├── values-uriel-tween-agency-service.yaml
-│   │       ├── values-veil-service.yaml
-│   │       └── values-<application>.yaml
-│   ├── apps/                         # Kubernetes manifests
-│   ├── charts/                       # Helm charts
+│   │   └── bank-appset/              # Helm values per application
+│   │       └── values-<app>.yaml
+│   ├── apps/                         # ArgoCD Application manifests
+│   ├── api-gateways/                 # Gateway API configuration
+│   ├── certs/                        # Certificate manifests
 │   ├── karpenter/                    # Karpenter provisioners
-│   ├── penumbra-node/                # Penumbra node configs
-│   └── bank-appset.yaml                # ArgoCD ApplicationSet
+│   ├── bank-appset.yaml              # AppSet for banking apps
+│   ├── apps-appset.yaml              # Generic AppSet
+│   └── http-route.yaml               # HTTP Routes
 │
 ├── prod/                             # Production environment
 │   ├── config/
-│   │   └── bank-appset/                # Helm values per application
-│   ├── apps/
-│   ├── certs/                        # TLS certificates
-│   ├── karpenter/
-│   ├── node-ingress/                 # Ingress configurations
-│   ├── other-ingress/
-│   ├── sg-cluster/                   # Security groups
-│   ├── sg-db/                        # Database security groups
-│   └── bank-appset.yaml                # ArgoCD ApplicationSet
+│   │   └── bank-appset/              # Helm values per application
+│   ├── apps/                         # ArgoCD Application manifests
+│   ├── api-gateways/                 # Gateway API configuration
+│   ├── certs/                        # Certificate manifests
+│   ├── karpenter/                    # Karpenter provisioners
+│   ├── bank-appset.yaml              # AppSet for banking apps
+│   ├── apps-appset.yaml              # Generic AppSet
+│   ├── apps-observability.yaml       # Observability Stack
+│   └── http-route.yaml               # HTTP Routes
 │
 ├── charts/                           # Shared Helm chart templates
-│   ├── barista-val-cafe/
-│   │   ├── Chart.yaml
-│   │   ├── values.yaml
-│   │   └── templates/
-│   ├── cleanwork-va-service/
-│   ├── penumbra-analytics-service/
-│   ├── penumbra-indexer-node/
-│   ├── penumbra-lqt-bot/
-│   ├── tokenomics/
-│   ├── uriel-tween-agency-service/
-│   ├── veil-service/
-│   └── void-vote/
+│   ├── banksystem-centralapi/
+│   ├── banksystem-demoshop/
+│   ├── banksystem-web/
+│   └── uriel-tween-agency-service/
 │
-└── scripts/
-    └── update-karpenter-kms.sh       # Operational scripts
+├── apps-karpenter-provisioners.yaml
+└── INTERVIEW-PRESENTATION-GUIDE.md
 ```
 
 ---
@@ -159,34 +165,39 @@ gitops-apps/
 
 #### Workflow Inputs
 
-| Input | Type | Required | Description |
-|-------|------|----------|-------------|
-| `commit_id` | string | ✅ | Immutable image tag (commit SHA) |
-| `repo_name` | string | ✅ | Application identifier (e.g., `banksystem-web`) |
-| `environment` | string | ✅ | Target environment (`staging` or `prod`) |
-| `runner_label` | string | ❌ | GitHub runner label (default: `ubuntu-latest`) |
+| Input          | Type   | Required | Description                                     |
+| -------------- | ------ | -------- | ----------------------------------------------- |
+| `commit_id`    | string | ✅       | Immutable image tag (commit SHA)                |
+| `repo_name`    | string | ✅       | Application identifier (e.g., `banksystem-web`) |
+| `environment`  | string | ✅       | Target environment (`staging` or `prod`)        |
+| `runner_label` | string | ❌       | GitHub runner label (default: `ubuntu-latest`)  |
 
 #### Workflow Steps
 
 1. **Environment Validation**
+
    - Validates that environment is either `staging` or `prod`
    - Exits with error if invalid environment provided
 
 2. **GitHub App Authentication**
+
    - Generates GitHub App token using `tibdex/github-app-token`
    - Uses scoped credentials: `GITOPS_APP_ID` and `GITOPS_APP_PRIVATE_KEY`
    - Token scoped only to this GitOps repository
 
 3. **Repository Checkout**
+
    - Checks out `main` branch
    - Uses GitHub App token for authentication
    - Fetches full history (`fetch-depth: 0`)
 
 4. **Install yq (YAML Processor)**
+
    - Installs `yq` version 4.45.1
    - Required for safe YAML manipulation
 
 5. **Manifest Update**
+
    - Updates Helm values file at:
      ```
      <environment>/config/bank-appset/values-<repo_name>.yaml
@@ -198,11 +209,13 @@ gitops-apps/
      ```
 
 6. **Idempotency Check**
+
    - Runs `git diff --quiet` to detect changes
    - Skips commit if no changes detected
    - Prevents unnecessary commits and ArgoCD syncs
 
 7. **Git Commit and Push**
+
    - Uses `EndBug/add-and-commit@v9` action
    - Commit message format:
      ```
@@ -211,6 +224,7 @@ gitops-apps/
    - Pushes to `main` branch using bot identity
 
 8. **Environment Protection** (Production Only)
+
    - GitHub Environments enforce manual approval for `prod`
    - Creates audit trail for compliance
    - Requires authorized approver
@@ -243,7 +257,7 @@ gitops-apps/
 │ 2. CI Pipeline (actions-templates/publish.yaml)            │
 │    ├─ Build Docker image                                    │
 │    ├─ Scan with Anchore                                     │
-│    ├─ Push to ECR (111111222222.dkr.ecr.eu-west-1)        │
+│    ├─ Push to ECR (555555666666.dkr.ecr.eu-west-1)        │
 │    └─ Tag: <repo-name>:<commit-sha>                        │
 └─────────────────────────────────────────────────────────────┘
                           ↓
@@ -302,6 +316,7 @@ gitops-apps/
 ### Critical Security Boundaries
 
 **At no point does CI:**
+
 - ❌ Access the Kubernetes cluster
 - ❌ Apply manifests directly
 - ❌ Hold cluster credentials
@@ -320,10 +335,12 @@ gitops-apps/
 This repository uses **GitHub App authentication** (not Personal Access Tokens) for all automated operations.
 
 **Secrets Required**:
+
 - `GITOPS_APP_ID`: GitHub App ID
 - `GITOPS_APP_PRIVATE_KEY`: GitHub App private key (PEM format)
 
 **Benefits**:
+
 - ✅ Fine-grained permissions
 - ✅ Scoped to specific repositories
 - ✅ Automatic token rotation
@@ -339,6 +356,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 ### Branch Protection
 
 **Main Branch Protection Rules**:
+
 - ✅ Require pull request reviews (2+ approvers recommended)
 - ✅ Dismiss stale reviews on new commits
 - ✅ Require status checks to pass
@@ -348,12 +366,14 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 ### Environment Protection
 
 **Production Environment**:
+
 - ✅ Required reviewers: DevOps/SRE team
 - ✅ Deployment approval timeout: 24 hours
 - ✅ Protection rules enforced at GitHub environment level
 - ✅ Full audit trail for compliance
 
 **Staging Environment**:
+
 - ✅ Auto-deployment enabled
 - ✅ No manual approval required
 - ✅ Faster iteration cycles
@@ -367,6 +387,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 **Purpose**: Pre-production testing and validation
 
 **Characteristics**:
+
 - Auto-sync enabled in ArgoCD
 - Self-heal enabled (auto-revert manual changes)
 - Prune enabled (delete removed resources)
@@ -374,6 +395,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 - Lower resource limits
 
 **Triggered By**:
+
 - Push to `dev` branch in application repositories
 
 **Directory**: `staging/`
@@ -383,6 +405,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 **Purpose**: Live production workloads
 
 **Characteristics**:
+
 - Auto-sync enabled (can add manual approval)
 - Self-heal enabled
 - Prune enabled with caution
@@ -391,6 +414,7 @@ This repository uses **GitHub App authentication** (not Personal Access Tokens) 
 - Multi-AZ deployment
 
 **Triggered By**:
+
 - Push to `main` branch in application repositories
 - Requires manual approval (GitHub Environment protection)
 
@@ -417,24 +441,24 @@ metadata:
 spec:
   generators:
     - git:
-        repoURL: 'git@github.com:gabriel-devops-portfolio/gitops-apps.git'
+        repoURL: "git@github.com:gabriel-devops-portfolio/gitops-apps.git"
         revision: main
         files:
-          - path: 'staging/config/bank-appset/*.yaml'
+          - path: "staging/config/bank-appset/*.yaml"
   template:
     metadata:
       annotations:
-        notifications.argoproj.io/subscribe.on-sync-failed.slack: '{{ channel }}'
-      name: '{{ application }}'
+        notifications.argoproj.io/subscribe.on-sync-failed.slack: "{{ channel }}"
+      name: "{{ application }}"
     spec:
       destination:
-        namespace: '{{ clusterConfig.namespace }}'
+        namespace: "{{ clusterConfig.namespace }}"
         server: https://kubernetes.default.svc
-      project: 'default'
+      project: "default"
       source:
         repoURL: git@github.com:gabriel-devops-portfolio/gitops-apps.git
         targetRevision: main
-        path: 'staging/charts/{{ application }}'
+        path: "staging/charts/{{ application }}"
         helm:
           valueFiles:
             - ../../config/bank-appset/values-{{ application }}.yaml
@@ -539,21 +563,25 @@ git diff HEAD~1 staging/config/bank-appset/values-banksystem-web.yaml
 ### Debugging Failed Deployments
 
 1. **Check ArgoCD Application Status**:
+
    ```bash
    argocd app get <application-name>
    ```
 
 2. **View ArgoCD Logs**:
+
    ```bash
    argocd app logs <application-name>
    ```
 
 3. **Check Kubernetes Events**:
+
    ```bash
    kubectl get events -n <namespace> --sort-by='.lastTimestamp'
    ```
 
 4. **Check Pod Status**:
+
    ```bash
    kubectl get pods -n <namespace>
    kubectl describe pod <pod-name> -n <namespace>
@@ -613,12 +641,14 @@ argocd app sync <app-name> --force
 This architecture is suitable for:
 
 ### Regulatory Environments
+
 - ✅ SOC 2 Type II compliance
 - ✅ HIPAA compliance (with additional controls)
 - ✅ PCI-DSS compliance
 - ✅ GDPR compliance
 
 ### Enterprise Requirements
+
 - ✅ Multi-team platforms
 - ✅ Multi-tenancy support
 - ✅ Disaster recovery capabilities
@@ -626,6 +656,7 @@ This architecture is suitable for:
 - ✅ Change approval processes
 
 ### DevOps Best Practices
+
 - ✅ Infrastructure as Code (IaC)
 - ✅ GitOps principles
 - ✅ Continuous delivery
@@ -702,6 +733,7 @@ flowchart TB
 ```
 
 **Key Security Observation:**
+
 > There is no direct network or credential path from CI pipelines to the Kubernetes cluster. Git is the only deployment boundary.
 
 ---
@@ -721,25 +753,26 @@ This architecture is intentionally designed around the following principles:
 
 ### Blast Radius Reduction
 
-| Component | Potential Compromise | Impact |
-|-----------|---------------------|--------|
-| Application Repo | Source code leak | Limited to single service |
-| CI Templates Repo | Pipeline logic modified | No cluster access granted |
-| GitOps Repo | Deployment intent altered | Auditable & reviewable via Git |
-| Kubernetes Cluster | Runtime compromise | Isolated from CI/CD |
+| Component          | Potential Compromise      | Impact                         |
+| ------------------ | ------------------------- | ------------------------------ |
+| Application Repo   | Source code leak          | Limited to single service      |
+| CI Templates Repo  | Pipeline logic modified   | No cluster access granted      |
+| GitOps Repo        | Deployment intent altered | Auditable & reviewable via Git |
+| Kubernetes Cluster | Runtime compromise        | Isolated from CI/CD            |
 
 **Result:** A compromise in any single repository cannot cascade across the system.
 
 ### Identity & Authentication
 
-| Area | Mechanism | Security Benefit |
-|------|-----------|------------------|
-| GitHub Actions → AWS | OIDC | Temporary credentials, no secrets |
-| Cross-repo Workflows | GitHub App | Scoped tokens, audit trail |
-| GitOps Commits | GitHub App | Short-lived, repository-specific |
-| Cluster Access | ArgoCD service account | No human credentials |
+| Area                 | Mechanism              | Security Benefit                  |
+| -------------------- | ---------------------- | --------------------------------- |
+| GitHub Actions → AWS | OIDC                   | Temporary credentials, no secrets |
+| Cross-repo Workflows | GitHub App             | Scoped tokens, audit trail        |
+| GitOps Commits       | GitHub App             | Short-lived, repository-specific  |
+| Cluster Access       | ArgoCD service account | No human credentials              |
 
 **Explicitly NOT Used:**
+
 - ❌ Long-lived credentials
 - ❌ Personal Access Tokens (PATs)
 - ❌ Hardcoded secrets in pipelines
@@ -749,12 +782,13 @@ This architecture is intentionally designed around the following principles:
 
 **GitHub Environments** enforce:
 
-| Environment | Protection | Requirements |
-|-------------|-----------|--------------|
-| `staging` | Automated | No approval required |
-| `prod` | Manual approval | 1+ authorized reviewers |
+| Environment | Protection      | Requirements            |
+| ----------- | --------------- | ----------------------- |
+| `staging`   | Automated       | No approval required    |
+| `prod`      | Manual approval | 1+ authorized reviewers |
 
 **Production Deployment Requirements:**
+
 - ✅ Manual approval from authorized reviewer
 - ✅ Explicit reviewer acknowledgment
 - ✅ Environment-scoped secrets
@@ -762,6 +796,7 @@ This architecture is intentionally designed around the following principles:
 - ✅ Full audit trail
 
 **Secrets Management:**
+
 - Environment-scoped (staging/prod isolation)
 - Never shared across environments
 - Rotated via GitHub Apps
@@ -772,6 +807,7 @@ This architecture is intentionally designed around the following principles:
 Every deployment is traceable via:
 
 1. **Git Commit History**
+
    - Commit message includes:
      - Application name
      - Target environment
@@ -780,6 +816,7 @@ Every deployment is traceable via:
    - Example: `staging: deploy banksystem-web @ abc123def456`
 
 2. **GitHub Actions Run Logs**
+
    - Workflow execution history
    - Step-by-step audit trail
    - Timing information
@@ -799,52 +836,53 @@ Every deployment is traceable via:
 
 ### ISO 27001 Control Mapping
 
-| ISO 27001 Control | Implementation in This Architecture |
-|-------------------|-------------------------------------|
-| **A.5.15** Access Control | GitHub repository permissions, Environment protection |
-| **A.5.16** Identity Management | GitHub App authentication, OIDC for AWS |
-| **A.8.9** Configuration Management | GitOps declarative manifests, Helm charts |
-| **A.8.11** Change Management | Git commits as change records, PR reviews |
-| **A.8.12** Logging & Monitoring | GitHub Actions logs, ArgoCD audit logs |
-| **A.5.23** Information Security for Cloud | No CI → cluster credentials, pull-based sync |
-| **A.8.25** Secure Development Lifecycle | Centralized CI templates, security scanning |
+| ISO 27001 Control                         | Implementation in This Architecture                   |
+| ----------------------------------------- | ----------------------------------------------------- |
+| **A.5.15** Access Control                 | GitHub repository permissions, Environment protection |
+| **A.5.16** Identity Management            | GitHub App authentication, OIDC for AWS               |
+| **A.8.9** Configuration Management        | GitOps declarative manifests, Helm charts             |
+| **A.8.11** Change Management              | Git commits as change records, PR reviews             |
+| **A.8.12** Logging & Monitoring           | GitHub Actions logs, ArgoCD audit logs                |
+| **A.5.23** Information Security for Cloud | No CI → cluster credentials, pull-based sync          |
+| **A.8.25** Secure Development Lifecycle   | Centralized CI templates, security scanning           |
 
 **Compliance Note:**
+
 > This design directly supports ISO 27001 audit evidence collection. All deployment changes are immutably recorded in Git with full traceability.
 
 ### NIST SP 800-53 Control Mapping
 
-| NIST Control | Description | Architectural Implementation |
-|--------------|-------------|------------------------------|
-| **AC-3** | Access Enforcement | Repository & environment-level permissions |
-| **AC-6** | Least Privilege | No cluster credentials in CI pipelines |
-| **IA-2** | Identification & Authentication | GitHub App authentication, OIDC |
-| **CM-2** | Baseline Configuration | GitOps repository as single source of truth |
-| **CM-3** | Configuration Change Control | Pull requests & Git commits |
-| **AU-2** | Audit Events | GitHub Actions & ArgoCD logs |
-| **AU-6** | Audit Review | Git history & workflow logs |
-| **SC-7** | Boundary Protection | CI isolated from runtime environment |
-| **SI-7** | Software & Information Integrity | Declarative desired state, immutable artifacts |
+| NIST Control | Description                      | Architectural Implementation                   |
+| ------------ | -------------------------------- | ---------------------------------------------- |
+| **AC-3**     | Access Enforcement               | Repository & environment-level permissions     |
+| **AC-6**     | Least Privilege                  | No cluster credentials in CI pipelines         |
+| **IA-2**     | Identification & Authentication  | GitHub App authentication, OIDC                |
+| **CM-2**     | Baseline Configuration           | GitOps repository as single source of truth    |
+| **CM-3**     | Configuration Change Control     | Pull requests & Git commits                    |
+| **AU-2**     | Audit Events                     | GitHub Actions & ArgoCD logs                   |
+| **AU-6**     | Audit Review                     | Git history & workflow logs                    |
+| **SC-7**     | Boundary Protection              | CI isolated from runtime environment           |
+| **SI-7**     | Software & Information Integrity | Declarative desired state, immutable artifacts |
 
 ### SOC 2 Type II Readiness
 
-| Trust Service Criteria | Implementation |
-|------------------------|----------------|
-| **Security (CC)** | Zero-trust architecture, least privilege |
-| **Availability (A)** | Multi-AZ EKS, fast rollback capability |
-| **Processing Integrity (PI)** | Immutable artifacts, declarative state |
-| **Confidentiality (C)** | GitHub Apps, environment-scoped secrets |
-| **Privacy (P)** | Audit logs, access controls |
+| Trust Service Criteria        | Implementation                           |
+| ----------------------------- | ---------------------------------------- |
+| **Security (CC)**             | Zero-trust architecture, least privilege |
+| **Availability (A)**          | Multi-AZ EKS, fast rollback capability   |
+| **Processing Integrity (PI)** | Immutable artifacts, declarative state   |
+| **Confidentiality (C)**       | GitHub Apps, environment-scoped secrets  |
+| **Privacy (P)**               | Audit logs, access controls              |
 
 ### PCI-DSS Alignment
 
-| Requirement | Implementation |
-|-------------|----------------|
-| **Req 2** Secure Configuration | GitOps declarative configuration |
-| **Req 6** Secure Development | Security scanning, centralized templates |
-| **Req 7** Access Control | GitHub permissions, environment protection |
-| **Req 8** Identity Management | GitHub Apps, OIDC authentication |
-| **Req 10** Logging & Monitoring | Comprehensive audit trail |
+| Requirement                     | Implementation                             |
+| ------------------------------- | ------------------------------------------ |
+| **Req 2** Secure Configuration  | GitOps declarative configuration           |
+| **Req 6** Secure Development    | Security scanning, centralized templates   |
+| **Req 7** Access Control        | GitHub permissions, environment protection |
+| **Req 8** Identity Management   | GitHub Apps, OIDC authentication           |
+| **Req 10** Logging & Monitoring | Comprehensive audit trail                  |
 
 ---
 
@@ -855,24 +893,28 @@ Every deployment is traceable via:
 This CI/CD design is suitable for:
 
 ✅ **Banking & Financial Services**
+
 - Full audit trail for compliance
 - Separation of duties
 - Approval gates for production
 - Immutable deployment records
 
 ✅ **Healthcare (HIPAA)**
+
 - Access controls and authentication
 - Audit logging
 - Least privilege access
 - Change management
 
 ✅ **Government & Defense**
+
 - Zero-trust architecture
 - Boundary protection
 - No credential exposure
 - Tamper-evident logs
 
 ✅ **Telecommunications**
+
 - High availability design
 - Fast rollback capability
 - Multi-environment isolation
@@ -880,16 +922,16 @@ This CI/CD design is suitable for:
 
 ### Enterprise Requirements Met
 
-| Requirement | How This Architecture Satisfies |
-|-------------|--------------------------------|
-| **Separation of Concerns** | Three-repository architecture |
-| **Least Privilege** | Scoped tokens, no shared credentials |
-| **Zero Trust** | No implicit trust, verification at each step |
-| **Auditability** | Full Git history, immutable logs |
-| **Approval Gates** | GitHub Environment protection |
-| **Fast Recovery** | Sub-2-minute rollback via Git revert |
-| **Multi-tenancy** | Namespace isolation, ApplicationSets |
-| **Scalability** | Supports 20+ microservices |
+| Requirement                | How This Architecture Satisfies              |
+| -------------------------- | -------------------------------------------- |
+| **Separation of Concerns** | Three-repository architecture                |
+| **Least Privilege**        | Scoped tokens, no shared credentials         |
+| **Zero Trust**             | No implicit trust, verification at each step |
+| **Auditability**           | Full Git history, immutable logs             |
+| **Approval Gates**         | GitHub Environment protection                |
+| **Fast Recovery**          | Sub-2-minute rollback via Git revert         |
+| **Multi-tenancy**          | Namespace isolation, ApplicationSets         |
+| **Scalability**            | Supports 20+ microservices                   |
 
 ### CNCF GitOps Maturity Alignment
 
@@ -908,24 +950,24 @@ This implementation meets the [CNCF GitOps Principles](https://opengitops.dev/):
 
 ### Security Posture
 
-| Metric | Target | Current |
-|--------|--------|---------|
-| Image Scanning Coverage | 100% | 100% ✅ |
-| Critical Vulnerabilities Blocked | Yes | Yes ✅ |
-| Static Credentials in CI | 0 | 0 ✅ |
-| Production Approval Rate | 100% | 100% ✅ |
-| Audit Log Retention | 90 days+ | Git history ✅ |
-| MTTR (Security Incident) | < 5 min | < 2 min ✅ |
+| Metric                           | Target   | Current        |
+| -------------------------------- | -------- | -------------- |
+| Image Scanning Coverage          | 100%     | 100% ✅        |
+| Critical Vulnerabilities Blocked | Yes      | Yes ✅         |
+| Static Credentials in CI         | 0        | 0 ✅           |
+| Production Approval Rate         | 100%     | 100% ✅        |
+| Audit Log Retention              | 90 days+ | Git history ✅ |
+| MTTR (Security Incident)         | < 5 min  | < 2 min ✅     |
 
 ### Compliance Metrics
 
-| Metric | Target | Status |
-|--------|--------|--------|
-| Deployment Traceability | 100% | ✅ Full Git history |
-| Change Approval (Prod) | 100% | ✅ GitHub Environments |
-| Access Review Frequency | Quarterly | ✅ Implemented |
-| Least Privilege Enforcement | Yes | ✅ Scoped tokens |
-| Audit Log Completeness | 100% | ✅ Multi-layer logs |
+| Metric                      | Target    | Status                 |
+| --------------------------- | --------- | ---------------------- |
+| Deployment Traceability     | 100%      | ✅ Full Git history    |
+| Change Approval (Prod)      | 100%      | ✅ GitHub Environments |
+| Access Review Frequency     | Quarterly | ✅ Implemented         |
+| Least Privilege Enforcement | Yes       | ✅ Scoped tokens       |
+| Audit Log Completeness      | 100%      | ✅ Multi-layer logs    |
 
 ---
 
@@ -934,6 +976,7 @@ This implementation meets the [CNCF GitOps Principles](https://opengitops.dev/):
 Use this checklist when presenting this architecture for review:
 
 ### Security Review
+
 - [x] No static credentials in CI/CD
 - [x] Least privilege access controls
 - [x] Network isolation (CI → GitOps → Cluster)
@@ -942,6 +985,7 @@ Use this checklist when presenting this architecture for review:
 - [x] Authentication via GitHub Apps/OIDC
 
 ### Compliance Review
+
 - [x] Full audit trail via Git
 - [x] Approval gates for production
 - [x] Change management process
@@ -950,6 +994,7 @@ Use this checklist when presenting this architecture for review:
 - [x] Meets ISO 27001 controls
 
 ### Operational Review
+
 - [x] Fast deployment (< 5 min)
 - [x] Fast rollback (< 2 min)
 - [x] Self-service for developers
@@ -958,6 +1003,7 @@ Use this checklist when presenting this architecture for review:
 - [x] Scalable architecture
 
 ### Business Review
+
 - [x] Reduces operational overhead
 - [x] Enables faster time to market
 - [x] Reduces security risk
@@ -970,6 +1016,7 @@ Use this checklist when presenting this architecture for review:
 ## �📚 References & Standards
 
 ### Documentation
+
 - [ArgoCD Documentation](https://argo-cd.readthedocs.io/)
 - [GitOps Principles](https://opengitops.dev/)
 - [Helm Documentation](https://helm.sh/docs/)
@@ -977,6 +1024,7 @@ Use this checklist when presenting this architecture for review:
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 
 ### Compliance Standards
+
 - [ISO/IEC 27001:2022](https://www.iso.org/standard/27001)
 - [NIST SP 800-53 Rev. 5](https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final)
 - [SOC 2 Type II](https://www.aicpa.org/interestareas/frc/assuranceadvisoryservices/aicpasoc2report.html)
@@ -984,6 +1032,7 @@ Use this checklist when presenting this architecture for review:
 - [CNCF GitOps Principles](https://opengitops.dev/)
 
 ### Security Resources
+
 - [OWASP CI/CD Security](https://owasp.org/www-project-devsecops-guideline/)
 - [GitHub Security Best Practices](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 - [AWS Security Best Practices](https://docs.aws.amazon.com/security/)

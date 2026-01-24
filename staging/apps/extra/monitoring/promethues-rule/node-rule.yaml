@@ -1,0 +1,44 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: node-health-alerts
+  namespace: monitoring
+  labels:
+    prometheus: prometheus
+spec:
+  groups:
+    - name: node.rules
+      rules:
+
+        # ----------------------------------
+        # Kubernetes node not ready (primary)
+        # ----------------------------------
+        - alert: NodeNotReady
+          expr: |
+            kube_node_status_condition{
+              condition="Ready",
+              status="true"
+            } == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Node {{ $labels.node }} is NotReady"
+            description: |
+              Kubernetes node {{ $labels.node }} has been in NotReady
+              state for more than 5 minutes.
+
+        # ----------------------------------
+        # Node exporter down (secondary)
+        # ----------------------------------
+        - alert: NodeExporterDown
+          expr: |
+            up{job=~".*node-exporter.*"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node exporter down on {{ $labels.instance }}"
+            description: |
+              Prometheus cannot scrape node exporter on {{ $labels.instance }}
+              for more than 5 minutes.

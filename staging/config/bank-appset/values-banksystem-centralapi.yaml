@@ -1,12 +1,15 @@
-application: banksystem-web
+application: banksystem-centralapi
+
 clusterConfig:
   namespace: banksystem
-replicaCount: 1
+
+replicaCount: 2
+
 image:
-  registry: 111111222222.dkr.ecr.eu-west-1.amazonaws.com
-  repository: banksystem-web
+  registry: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+  repository: centralapi
   tag: ""
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
 
 imagePullSecrets: []
 
@@ -17,8 +20,8 @@ serviceAccount:
   create: true
   automount: true
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/banksystem-web-rds-role
-  name: banksystem-web
+    eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/centralapi-rds-role
+  name: centralapi-sa
 
 podAnnotations: {}
 podLabels: {}
@@ -37,6 +40,7 @@ securityContext: {}
 service:
   type: ClusterIP
   port: 80
+  name: http
 
 containerPort:
   name: http
@@ -54,19 +58,19 @@ ingress:
   tls: []
 
 httpRoute:
-  enabled: true
+  enabled: false
   annotations: {}
   parentRefs:
     - name: platform-gateway
       namespace: gateway-system
       sectionName: http
   hostnames:
-    - banksystem-web.app.pilotgab.com
+    - centralapi.app.pilotgab.com
   rules:
     - matches:
         - path:
             type: PathPrefix
-            value: /headers
+            value: /
 
 resources:
   requests:
@@ -111,11 +115,11 @@ env:
   - name: RdsAuthentication__RdsEndpoint
     value: "<RDS_ENDPOINT>"
   - name: RdsAuthentication__DbUser
-    value: "banksystem_app"
+    value: "centralapi_app"
   - name: RdsAuthentication__AwsRegion
     value: "us-east-1"
   - name: RdsAuthentication__FallbackPassword
     valueFrom:
       secretKeyRef:
-        name: banksystem-db-credentials
+        name: centralapi-db-credentials
         key: password
