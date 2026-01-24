@@ -148,7 +148,6 @@ gitops-apps/
 │   └── uriel-tween-agency-service/
 │
 ├── apps-karpenter-provisioners.yaml
-└── INTERVIEW-PRESENTATION-GUIDE.md
 ```
 
 ---
