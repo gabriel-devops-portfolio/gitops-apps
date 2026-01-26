@@ -8,18 +8,14 @@ on:
         description: "Image tag / commit SHA"
         required: true
         type: string
-
       repo_name:
         description: "Application repository name"
         required: true
         type: string
-
       environment:
         description: "Target environment"
         required: true
-        default: staging
         type: string
-
       runner_label:
         description: "Runner label"
         required: false
@@ -30,8 +26,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: gitops-${{ inputs.repo_name }}-${{ inputs.environment }}
-  cancel-in-progress: true
+  group: gitops-commit-pool
+  cancel-in-progress: false
 
 jobs:
   update-image:
@@ -44,15 +40,12 @@ jobs:
         run: |
           case "${{ inputs.environment }}" in
             staging|prod) ;;
-            *)
-              echo "Invalid environment: ${{ inputs.environment }}"
-              exit 1
-              ;;
+            *) echo "Invalid environment: ${{ inputs.environment }}"; exit 1 ;;
           esac
 
       - name: Generate GitHub App token
         id: generate_token
-        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92
+        uses: tibdex/github-app-token@v2
         with:
           app_id: ${{ secrets.GITOPS_APP_ID }}
           private_key: ${{ secrets.GITOPS_APP_PRIVATE_KEY }}
@@ -60,84 +53,70 @@ jobs:
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
-          ref: main
           token: ${{ steps.generate_token.outputs.token }}
           fetch-depth: 0
 
-      - name: Install yq
-        uses: dcarbone/install-yq-action@v1.3.1
-        with:
-          version: v4.45.1
-
       - name: Update image tag
         run: |
+          # 1. Define File Path
           FILE="${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml"
 
           if [[ ! -f "$FILE" ]]; then
-            echo "File not found: $FILE"
+            echo "::error::File not found: $FILE"
             exit 1
           fi
 
-          CURRENT_TAG=$(yq '.image.tag' "$FILE")
-
+          CURRENT_TAG=$(yq eval '.image.tag' "$FILE")
           if [[ "$CURRENT_TAG" == "${{ inputs.commit_id }}" ]]; then
+            echo "Image tag is already up to date. Skipping."
+            echo "changed=false" >> $GITHUB_ENV
             exit 0
           fi
 
-          yq -i '.image.tag = "${{ inputs.commit_id }}"' "$FILE"
-
-      - name: Detect no-op change
-        run: |
-          if git diff --quiet; then
-            exit 0
-          fi
+          yq eval ".image.tag = \"${{ inputs.commit_id }}\"" -i "$FILE"
+          echo "changed=true" >> $GITHUB_ENV
 
       - name: Commit and push change
+        if: env.changed == 'true'
         uses: EndBug/add-and-commit@v9
         with:
-          add: ${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml
-          message: |
-            ${{ inputs.environment }}: deploy ${{ inputs.repo_name }} @ ${{ inputs.commit_id }}
-          push: true
+          add: "${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml"
+          message: "${{ inputs.environment }}: update ${{ inputs.repo_name }} image to ${{ inputs.commit_id }}"
           pull: "--rebase --autostash"
-          author_name: gitops-bot
-          author_email: gitops-bot@users.noreply.github.com
+          author_name: "GitOps Bot"
+          author_email: "gitops-bot@users.noreply.github.com"
+          push: true
 
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@v1.24
+        uses: slackapi/slack-github-action@v1.26.0
         with:
           channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
           payload: |
             {
-              "text": "GitOps deployment failed",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "ArgoCD GitOps Commit Failed",
+                    "text": "🚨 GitOps Deployment Failed",
                     "emoji": true
                   }
                 },
                 {
                   "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*App:* ${{ inputs.repo_name }}\n*Env:* ${{ inputs.environment }}\n*Image:* ${{ inputs.commit_id }}"
-                  }
+                  "fields": [
+                    { "type": "mrkdwn", "text": "*App:*\n${{ inputs.repo_name }}" },
+                    { "type": "mrkdwn", "text": "*Env:*\n${{ inputs.environment }}" },
+                    { "type": "mrkdwn", "text": "*Target Tag:*\n`${{ inputs.commit_id }}`" }
+                  ]
                 },
                 {
                   "type": "actions",
                   "elements": [
                     {
                       "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View workflow run",
-                        "emoji": true
-                      },
-                      "style": "primary",
+                      "text": { "type": "plain_text", "text": "View Logs" },
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
                     }
                   ]
