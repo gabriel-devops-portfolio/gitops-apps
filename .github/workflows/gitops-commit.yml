@@ -58,7 +58,6 @@ jobs:
 
       - name: Update image tag
         run: |
-          # 1. Define File Path
           FILE="${{ inputs.environment }}/config/bank-appset/values-${{ inputs.repo_name }}.yaml"
 
           if [[ ! -f "$FILE" ]]; then
