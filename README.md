@@ -25,7 +25,7 @@ This repository implements a **secure, scalable, enterprise-grade GitOps archite
 
 ## 🏗️ Enterprise GitOps Methodology
 
-![Enterprise GitOps Methodology](./enterprise-gitops-methodology.png)
+![Enterprise GitOps Methodology](enterprise-cicd-pipeline-architecture.png)
 
 _Complete enterprise GitOps methodology showing the zero-trust CI/CD pipeline with three-repository architecture, security boundaries, environment protection gates, and ArgoCD-driven continuous delivery suitable for regulated environments._
 
@@ -170,32 +170,31 @@ gitops-apps/
 
 #### Workflow Inputs
 
-| Input            | Type   | Required | Description                                      |
-| ---------------- | ------ | -------- | ------------------------------------------------ |
-| `commit_id`    | string | ✅       | Immutable image tag (commit SHA)                 |
+| Input          | Type   | Required | Description                                    |
+| -------------- | ------ | -------- | ---------------------------------------------- |
+| `commit_id`    | string | ✅       | Immutable image tag (commit SHA)               |
 | `repo_name`    | string | ✅       | Application identifier (e.g.,`banksystem-web`) |
-| `environment`  | string | ✅       | Target environment (`staging` or `prod`)     |
+| `environment`  | string | ✅       | Target environment (`staging` or `prod`)       |
 | `runner_label` | string | ❌       | GitHub runner label (default:`ubuntu-latest`)  |
 
 #### Workflow Steps
 
 1. **Environment Validation**
-
    - Validates that environment is either `staging` or `prod`
    - Exits with error if invalid environment provided
    - Uses case statement for strict validation
-2. **GitHub App Authentication**
 
+2. **GitHub App Authentication**
    - Generates GitHub App token using `tibdex/github-app-token@v2`
    - Uses scoped credentials: `GITOPS_APP_ID` and `GITOPS_APP_PRIVATE_KEY`
    - Token scoped only to this GitOps repository
-3. **Repository Checkout**
 
+3. **Repository Checkout**
    - Checks out repository with GitHub App token
    - Uses `actions/checkout@v4` for reliability
    - Fetches full history (`fetch-depth: 0`)
-4. **Image Tag Update**
 
+4. **Image Tag Update**
    - Updates Helm values file at:
      ```
      <environment>/config/bank-appset/values-<repo_name>.yaml
@@ -206,14 +205,14 @@ gitops-apps/
      ```bash
      yq eval ".image.tag = \"${{ inputs.commit_id }}\"" -i "$FILE"
      ```
-5. **Idempotency Check**
 
+5. **Idempotency Check**
    - Compares current tag with target tag
    - Skips commit if no changes detected
    - Sets environment variable `changed=false` to skip subsequent steps
    - Prevents unnecessary commits and ArgoCD syncs
-6. **Git Commit and Push**
 
+6. **Git Commit and Push**
    - Uses `EndBug/add-and-commit@v9` action
    - Commit message format:
      ```
@@ -222,8 +221,8 @@ gitops-apps/
    - Uses bot identity: "GitOps Bot <gitops-bot@users.noreply.github.com>"
    - Includes rebase and autostash for conflict resolution
    - Only runs if `changed=true`
-7. **Failure Notification**
 
+7. **Failure Notification**
    - Sends Slack notification on workflow failure
    - Uses `slackapi/slack-github-action@v1.26.0`
    - Includes structured message with:
@@ -265,20 +264,19 @@ gitops-apps/
 - ✅ Faster iteration cycles
 
 7. **Git Commit and Push**
-
    - Uses `EndBug/add-and-commit@v9` action
    - Commit message format:
      ```
      staging: deploy banksystem-web @ abc123def456
      ```
    - Pushes to `main` branch using bot identity
-8. **Environment Protection** (Production Only)
 
+8. **Environment Protection** (Production Only)
    - GitHub Environments enforce manual approval for `prod`
    - Creates audit trail for compliance
    - Requires authorized approver
-9. **Notification**
 
+9. **Notification**
    - Sends Slack alerts on deployment events
    - Notifies team of failures
 
@@ -616,16 +614,19 @@ git diff HEAD~1 staging/config/bank-appset/values-banksystem-web.yaml
    ```bash
    argocd app get <application-name>
    ```
+
 2. **View ArgoCD Logs**:
 
    ```bash
    argocd app logs <application-name>
    ```
+
 3. **Check Kubernetes Events**:
 
    ```bash
    kubectl get events -n <namespace> --sort-by='.lastTimestamp'
    ```
+
 4. **Check Pod Status**:
 
    ```bash
@@ -633,8 +634,8 @@ git diff HEAD~1 staging/config/bank-appset/values-banksystem-web.yaml
    kubectl describe pod <pod-name> -n <namespace>
    kubectl logs <pod-name> -n <namespace>
    ```
-5. **Check GitHub Actions Workflow**:
 
+5. **Check GitHub Actions Workflow**:
    - Navigate to Actions tab in GitHub
    - Review `gitops-commit` workflow run
    - Check for errors in workflow steps
@@ -784,12 +785,12 @@ This architecture is intentionally designed around the following principles:
 
 ### Identity & Authentication
 
-| Area                  | Mechanism              | Security Benefit                  |
-| --------------------- | ---------------------- | --------------------------------- |
+| Area                 | Mechanism              | Security Benefit                  |
+| -------------------- | ---------------------- | --------------------------------- |
 | GitHub Actions → AWS | OIDC                   | Temporary credentials, no secrets |
-| Cross-repo Workflows  | GitHub App             | Scoped tokens, audit trail        |
-| GitOps Commits        | GitHub App             | Short-lived, repository-specific  |
-| Cluster Access        | ArgoCD service account | No human credentials              |
+| Cross-repo Workflows | GitHub App             | Scoped tokens, audit trail        |
+| GitOps Commits       | GitHub App             | Short-lived, repository-specific  |
+| Cluster Access       | ArgoCD service account | No human credentials              |
 
 **Explicitly NOT Used:**
 
@@ -804,8 +805,8 @@ This architecture is intentionally designed around the following principles:
 
 | Environment | Protection      | Requirements            |
 | ----------- | --------------- | ----------------------- |
-| `staging` | Automated       | No approval required    |
-| `prod`    | Manual approval | 1+ authorized reviewers |
+| `staging`   | Automated       | No approval required    |
+| `prod`      | Manual approval | 1+ authorized reviewers |
 
 **Production Deployment Requirements:**
 
@@ -827,21 +828,20 @@ This architecture is intentionally designed around the following principles:
 Every deployment is traceable via:
 
 1. **Git Commit History**
-
    - Commit message includes:
      - Application name
      - Target environment
      - Image SHA (immutable)
      - Committer identity
    - Example: `staging: deploy banksystem-web @ abc123def456`
-2. **GitHub Actions Run Logs**
 
+2. **GitHub Actions Run Logs**
    - Workflow execution history
    - Step-by-step audit trail
    - Timing information
    - Success/failure status
-3. **ArgoCD Sync History**
 
+3. **ArgoCD Sync History**
    - Application state changes
    - Health check results
    - Rollback operations
@@ -855,14 +855,14 @@ Every deployment is traceable via:
 
 ### ISO 27001 Control Mapping
 
-| ISO 27001 Control                               | Implementation in This Architecture                   |
-| ----------------------------------------------- | ----------------------------------------------------- |
+| ISO 27001 Control                         | Implementation in This Architecture                   |
+| ----------------------------------------- | ----------------------------------------------------- |
 | **A.5.15** Access Control                 | GitHub repository permissions, Environment protection |
 | **A.5.16** Identity Management            | GitHub App authentication, OIDC for AWS               |
 | **A.8.9** Configuration Management        | GitOps declarative manifests, Helm charts             |
 | **A.8.11** Change Management              | Git commits as change records, PR reviews             |
 | **A.8.12** Logging & Monitoring           | GitHub Actions logs, ArgoCD audit logs                |
-| **A.5.23** Information Security for Cloud | No CI → cluster credentials, pull-based sync         |
+| **A.5.23** Information Security for Cloud | No CI → cluster credentials, pull-based sync          |
 | **A.8.25** Secure Development Lifecycle   | Centralized CI templates, security scanning           |
 
 **Compliance Note:**
@@ -871,22 +871,22 @@ Every deployment is traceable via:
 
 ### NIST SP 800-53 Control Mapping
 
-| NIST Control   | Description                      | Architectural Implementation                   |
-| -------------- | -------------------------------- | ---------------------------------------------- |
-| **AC-3** | Access Enforcement               | Repository & environment-level permissions     |
-| **AC-6** | Least Privilege                  | No cluster credentials in CI pipelines         |
-| **IA-2** | Identification & Authentication  | GitHub App authentication, OIDC                |
-| **CM-2** | Baseline Configuration           | GitOps repository as single source of truth    |
-| **CM-3** | Configuration Change Control     | Pull requests & Git commits                    |
-| **AU-2** | Audit Events                     | GitHub Actions & ArgoCD logs                   |
-| **AU-6** | Audit Review                     | Git history & workflow logs                    |
-| **SC-7** | Boundary Protection              | CI isolated from runtime environment           |
-| **SI-7** | Software & Information Integrity | Declarative desired state, immutable artifacts |
+| NIST Control | Description                      | Architectural Implementation                   |
+| ------------ | -------------------------------- | ---------------------------------------------- |
+| **AC-3**     | Access Enforcement               | Repository & environment-level permissions     |
+| **AC-6**     | Least Privilege                  | No cluster credentials in CI pipelines         |
+| **IA-2**     | Identification & Authentication  | GitHub App authentication, OIDC                |
+| **CM-2**     | Baseline Configuration           | GitOps repository as single source of truth    |
+| **CM-3**     | Configuration Change Control     | Pull requests & Git commits                    |
+| **AU-2**     | Audit Events                     | GitHub Actions & ArgoCD logs                   |
+| **AU-6**     | Audit Review                     | Git history & workflow logs                    |
+| **SC-7**     | Boundary Protection              | CI isolated from runtime environment           |
+| **SI-7**     | Software & Information Integrity | Declarative desired state, immutable artifacts |
 
 ### SOC 2 Type II Readiness
 
-| Trust Service Criteria              | Implementation                           |
-| ----------------------------------- | ---------------------------------------- |
+| Trust Service Criteria        | Implementation                           |
+| ----------------------------- | ---------------------------------------- |
 | **Security (CC)**             | Zero-trust architecture, least privilege |
 | **Availability (A)**          | Multi-AZ EKS, fast rollback capability   |
 | **Processing Integrity (PI)** | Immutable artifacts, declarative state   |
@@ -895,8 +895,8 @@ Every deployment is traceable via:
 
 ### PCI-DSS Alignment
 
-| Requirement                           | Implementation                             |
-| ------------------------------------- | ------------------------------------------ |
+| Requirement                     | Implementation                             |
+| ------------------------------- | ------------------------------------------ |
 | **Req 2** Secure Configuration  | GitOps declarative configuration           |
 | **Req 6** Secure Development    | Security scanning, centralized templates   |
 | **Req 7** Access Control        | GitHub permissions, environment protection |
@@ -941,8 +941,8 @@ This CI/CD design is suitable for:
 
 ### Enterprise Requirements Met
 
-| Requirement                      | How This Architecture Satisfies              |
-| -------------------------------- | -------------------------------------------- |
+| Requirement                | How This Architecture Satisfies              |
+| -------------------------- | -------------------------------------------- |
 | **Separation of Concerns** | Three-repository architecture                |
 | **Least Privilege**        | Scoped tokens, no shared credentials         |
 | **Zero Trust**             | No implicit trust, verification at each step |
@@ -996,39 +996,39 @@ Use this checklist when presenting this architecture for review:
 
 ### Security Review
 
-- [X] No static credentials in CI/CD
-- [X] Least privilege access controls
-- [X] Network isolation (CI → GitOps → Cluster)
-- [X] Vulnerability scanning enabled
-- [X] Secrets management implemented
-- [X] Authentication via GitHub Apps/OIDC
+- [x] No static credentials in CI/CD
+- [x] Least privilege access controls
+- [x] Network isolation (CI → GitOps → Cluster)
+- [x] Vulnerability scanning enabled
+- [x] Secrets management implemented
+- [x] Authentication via GitHub Apps/OIDC
 
 ### Compliance Review
 
-- [X] Full audit trail via Git
-- [X] Approval gates for production
-- [X] Change management process
-- [X] Access controls documented
-- [X] Disaster recovery plan
-- [X] Meets ISO 27001 controls
+- [x] Full audit trail via Git
+- [x] Approval gates for production
+- [x] Change management process
+- [x] Access controls documented
+- [x] Disaster recovery plan
+- [x] Meets ISO 27001 controls
 
 ### Operational Review
 
-- [X] Fast deployment (< 5 min)
-- [X] Fast rollback (< 2 min)
-- [X] Self-service for developers
-- [X] Comprehensive documentation
-- [X] Monitoring and alerting
-- [X] Scalable architecture
+- [x] Fast deployment (< 5 min)
+- [x] Fast rollback (< 2 min)
+- [x] Self-service for developers
+- [x] Comprehensive documentation
+- [x] Monitoring and alerting
+- [x] Scalable architecture
 
 ### Business Review
 
-- [X] Reduces operational overhead
-- [X] Enables faster time to market
-- [X] Reduces security risk
-- [X] Supports compliance requirements
-- [X] Developer productivity improved
-- [X] Cost-effective (auto-scaling)
+- [x] Reduces operational overhead
+- [x] Enables faster time to market
+- [x] Reduces security risk
+- [x] Supports compliance requirements
+- [x] Developer productivity improved
+- [x] Cost-effective (auto-scaling)
 
 ---
 
