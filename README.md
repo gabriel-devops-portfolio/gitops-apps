@@ -301,7 +301,14 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 2. CI Pipeline (actions-templates/publish.yaml)            │
+│ 2. Security Checks (actions-templates/security-checks.yml) │
+│    ├─ Secret Scanning (TruffleHog - verified secrets)      │
+│    ├─ SAST/SCA (CodeQL, Semgrep, Trivy - BLOCKING)         │
+│    └─ DAST (OWASP ZAP baseline scan - BLOCKING)            │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 3. CI Pipeline (actions-templates/publish.yaml)            │
 │    ├─ Build Docker image                                    │
 │    ├─ Scan with Anchore                                     │
 │    ├─ Push to ECR (555555666666.dkr.ecr.eu-west-1)        │
@@ -309,7 +316,7 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 3. GitOps Trigger (actions-templates/trigger-gitops.yaml)  │
+│ 4. GitOps Trigger (actions-templates/trigger-gitops.yaml)  │
 │    ├─ Determine environment (staging/prod)                  │
 │    ├─ Generate GitHub App token                            │
 │    └─ Dispatch workflow to gitops-apps repo                │
@@ -318,7 +325,7 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 4. GitOps Update (gitops-apps/gitops-commit.yaml)          │
+│ 5. GitOps Update (gitops-apps/gitops-commit.yaml)          │
 │    ├─ Checkout gitops-apps repo                            │
 │    ├─ Update image tag in values file                      │
 │    │  └─ staging/config/bank-appset/values-banksystem-web.yaml │
@@ -326,14 +333,14 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 5. ArgoCD Detection                                         │
+│ 6. ArgoCD Detection                                         │
 │    ├─ Polls Git repository (every 3 minutes)               │
 │    ├─ Detects commit in gitops-apps                        │
 │    └─ Triggers sync operation                              │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 6. ArgoCD Reconciliation                                    │
+│ 7. ArgoCD Reconciliation                                    │
 │    ├─ Renders Helm chart with new image tag                │
 │    ├─ Compares desired state vs actual cluster state       │
 │    ├─ Applies changes to Kubernetes cluster                │
@@ -341,7 +348,7 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 7. Kubernetes Deployment                                    │
+│ 8. Kubernetes Deployment                                    │
 │    ├─ Create new ReplicaSet with updated image             │
 │    ├─ Scale up new pods                                     │
 │    ├─ Wait for readiness probes                            │
@@ -350,7 +357,7 @@ gitops-apps/
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 8. Health Monitoring & Validation                          │
+│ 9. Health Monitoring & Validation                          │
 │    ├─ ArgoCD health checks                                  │
 │    ├─ Pod status: Running & Ready                          │
 │    ├─ Service endpoints available                          │
@@ -709,55 +716,6 @@ This architecture is suitable for:
 - ✅ Continuous delivery
 - ✅ Immutable infrastructure
 - ✅ Declarative configuration
-
----
-
-## � Visual Architecture Diagrams
-
-### 1.1 Logical CI/CD & GitOps Flow
-
-```mermaid
-flowchart LR
-    Dev[Developer]
-
-    AppRepo["Application Repository<br/>(banksystem-web)"]
-
-    Publish["publish.yaml<br/>Build, Scan, Push Image"]
-    TriggerGitOps["trigger-gitops.yaml<br/>Trigger GitOps Commit"]
-
-    TemplatesRepo["actions-templates<br/>Repository"]
-    GitOpsCommit["gitops-commit.yaml<br/>Update Image Tag"]
-
-    GitOpsRepo["gitops-apps<br/>Repository"]
-    ArgoCD[ArgoCD]
-    K8s["Kubernetes Cluster<br/>(EKS)"]
-
-    Dev -->|git push| AppRepo
-
-    AppRepo -->|workflow_call| Publish
-    Publish -->|success required| TriggerGitOps
-
-    Publish -->|uses| TemplatesRepo
-    TriggerGitOps -->|uses| TemplatesRepo
-
-    TriggerGitOps -->|workflow_dispatch| GitOpsCommit
-    GitOpsCommit -->|git commit| GitOpsRepo
-
-    GitOpsRepo -->|watched by| ArgoCD
-    ArgoCD -->|sync| K8s
-
-    style AppRepo fill:#e1f5ff
-    style TemplatesRepo fill:#ffe1f5
-    style GitOpsRepo fill:#e1ffe1
-    style K8s fill:#fff4e1
-    style ArgoCD fill:#f0e1ff
-```
-
-**Key Security Observation:**
-
-> There is no direct network or credential path from CI pipelines to the Kubernetes cluster. Git is the only deployment boundary.
-
----
 
 ## 🔐 Security & Compliance Framework
 
